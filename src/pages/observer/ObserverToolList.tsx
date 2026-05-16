@@ -50,6 +50,24 @@ export function ObserverToolList() {
 
   if (!engagement) return null;
 
+  // Validate observer email matches an assessor
+  if (appMode === "prod" && !observerId) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-14 h-14 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5">
+          <AlertCircle size={26} />
+        </div>
+        <h1 className="display-serif text-2xl font-semibold text-navy-700">
+          Access denied
+        </h1>
+        <p className="text-sm text-ink-500 mt-3 leading-relaxed max-w-md mx-auto">
+          Your email ({profile?.email ?? "unknown"}) is not registered as an assessor
+          for this engagement. Contact your Lead Assessor.
+        </p>
+      </div>
+    );
+  }
+
   // If engagement is still draft, show message
   if (engagement.status === "draft") {
     return (

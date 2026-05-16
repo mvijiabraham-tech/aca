@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Building2 } from "lucide-react";
+import { LogOut, Building2, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,6 +26,9 @@ export function ObserverHome() {
     });
   }, [appMode, hydrated, hydrateStore]);
 
+  // In prod mode, require a valid profile with email
+  const emailVerified = appMode === "demo" || !!profile;
+
   // Filter to live/complete engagements where observer's email matches an assessor
   const myEngagements = useMemo(() => {
     const engagements = appMode === "prod"
@@ -43,10 +46,32 @@ export function ObserverHome() {
 
   // Auto-redirect if single engagement
   useEffect(() => {
-    if (myEngagements.length === 1) {
+    if (emailVerified && myEngagements.length === 1) {
       navigate(`/observe/${myEngagements[0].id}`, { replace: true });
     }
-  }, [myEngagements, navigate]);
+  }, [emailVerified, myEngagements, navigate]);
+
+  // Block access if email not verified (prod mode, no profile)
+  if (!emailVerified) {
+    return (
+      <div className="min-h-screen surface-canvas flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="w-14 h-14 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5">
+            <AlertCircle size={26} />
+          </div>
+          <h1 className="display-serif text-2xl font-semibold text-navy-700">
+            Email not verified
+          </h1>
+          <p className="text-sm text-ink-500 mt-3 leading-relaxed">
+            We could not verify your identity. Please sign in again or contact your Lead Assessor.
+          </p>
+          <Button variant="secondary" onClick={signOut} className="mt-6">
+            <LogOut size={13} /> Sign out
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // Multiple engagements — show picker
   if (myEngagements.length > 1) {

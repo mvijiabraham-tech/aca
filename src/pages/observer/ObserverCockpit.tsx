@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ArrowRight, CheckCircle2, Clock, Circle,
-  Building, Download,
+  Building, Download, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -32,7 +32,24 @@ export function ObserverCockpit() {
     return match?.id;
   })();
 
-  if (!engagement || !toolId || !observerId) return null;
+  if (!engagement || !toolId) return null;
+
+  // Validate observer email matches an assessor
+  if (!observerId) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-14 h-14 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5">
+          <AlertCircle size={26} />
+        </div>
+        <h1 className="display-serif text-2xl font-semibold text-navy-700">
+          Access denied
+        </h1>
+        <p className="text-sm text-ink-500 mt-3 leading-relaxed max-w-md mx-auto">
+          Your email is not registered as an assessor for this engagement.
+        </p>
+      </div>
+    );
+  }
 
   const tool = engagement.tools.find((t) => t.id === toolId);
   if (!tool) {
