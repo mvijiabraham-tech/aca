@@ -1,8 +1,8 @@
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Save,
-  EyeOff, RotateCcw, FileText, Star,
+  EyeOff, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -24,8 +24,6 @@ export function ScoreParticipantSheet() {
     engagementId: string; toolId: string; participantId: string;
   }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const phase: "rate" | "evidence" = searchParams.get("phase") === "evidence" ? "evidence" : "rate";
   const engagement = useEngagement(engagementId);
   const observerId = useActingObserverId(engagementId);
   const updateCompetencyScore = useAppStore((s) => s.updateCompetencyScore);
@@ -211,24 +209,6 @@ export function ScoreParticipantSheet() {
         )}
       </div>
 
-      {/* Phase tabs */}
-      <div className="bg-white rounded-lg border border-ink-200 p-1 inline-flex">
-        <PhaseTab
-          active={phase === "rate"}
-          onClick={() => setSearchParams({ phase: "rate" })}
-          icon={Star}
-          label="Pass 1 · Rate indicators"
-          sub="Rate all indicators across competencies"
-        />
-        <PhaseTab
-          active={phase === "evidence"}
-          onClick={() => setSearchParams({ phase: "evidence" })}
-          icon={FileText}
-          label="Pass 2 · Capture evidence"
-          sub="Add qualitative notes per competency"
-        />
-      </div>
-
       {/* Competency cards */}
       <div className="space-y-5">
         {tool.competencyIds.map((cid) => {
@@ -249,7 +229,6 @@ export function ScoreParticipantSheet() {
               indicators={targetLevel.indicators}
               draft={draft}
               isComplete={isComplete}
-              phase={phase}
               onIndicator={(idx, change) => setIndicator(cid, idx, change)}
               onNotes={(field, value) => setNotes(cid, field, value)}
             />
@@ -260,15 +239,7 @@ export function ScoreParticipantSheet() {
       {/* Navigation footer */}
       <div className="flex items-center justify-between pt-4 border-t border-ink-200">
         <div className="flex items-center gap-2">
-          {phase === "evidence" && (
-            <Button
-              variant="secondary"
-              onClick={() => setSearchParams({ phase: "rate" })}
-            >
-              <ChevronLeft size={13} /> Back to rating
-            </Button>
-          )}
-          {phase === "rate" && prevParticipant && (
+          {prevParticipant && (
             <Button
               variant="secondary"
               onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}/${prevParticipant.id}`)}
@@ -281,18 +252,10 @@ export function ScoreParticipantSheet() {
           Participant {currentIdx + 1} of {participants.length}
         </div>
         <div className="flex items-center gap-2">
-          {phase === "rate" ? (
+          {nextParticipant ? (
             <Button
               variant="primary"
-              onClick={() => setSearchParams({ phase: "evidence" })}
-              disabled={liveProgress.rated === 0}
-            >
-              Continue to evidence <ArrowRight size={13} />
-            </Button>
-          ) : nextParticipant ? (
-            <Button
-              variant="primary"
-              onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}/${nextParticipant.id}?phase=rate`)}
+              onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}/${nextParticipant.id}`)}
             >
               {nextParticipant.name} <ChevronRight size={13} />
             </Button>
@@ -310,39 +273,6 @@ export function ScoreParticipantSheet() {
   );
 }
 
-// ---------- PhaseTab ----------
-function PhaseTab({
-  active, onClick, icon: Icon, label, sub,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Star;
-  label: string;
-  sub: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-start gap-2.5 px-4 py-2.5 rounded-md transition-colors text-left",
-        active
-          ? "bg-navy-700 text-white"
-          : "text-ink-500 hover:text-navy-700 hover:bg-ink-100",
-      )}
-    >
-      <Icon size={15} className="flex-shrink-0 mt-0.5" />
-      <div>
-        <div className={cn("text-2xs font-semibold tracking-wider uppercase", active ? "text-white" : "text-ink-700")}>
-          {label}
-        </div>
-        <div className={cn("text-2xs leading-tight mt-0.5", active ? "text-white/70" : "text-ink-500")}>
-          {sub}
-        </div>
-      </div>
-    </button>
-  );
-}
-
 // ---------- CompetencyScoreCard ----------
 interface CompetencyScoreCardProps {
   competencyName: string;
@@ -351,13 +281,12 @@ interface CompetencyScoreCardProps {
   indicators: string[];
   draft: CompetencyScore;
   isComplete: boolean;
-  phase: "rate" | "evidence";
   onIndicator: (idx: number, change: Partial<IndicatorScore>) => void;
   onNotes: (field: "whatWasDoneWell" | "whatCouldBeBetter", value: string) => void;
 }
 
 function CompetencyScoreCard({
-  competencyName, definition, targetLevelLabel, indicators, draft, isComplete, phase,
+  competencyName, definition, targetLevelLabel, indicators, draft, isComplete,
   onIndicator, onNotes,
 }: CompetencyScoreCardProps) {
   const ratedCount = draft.indicators.filter((i) => i.rating !== undefined || i.notObserved).length;
@@ -385,93 +314,51 @@ function CompetencyScoreCard({
       <CardBody className="space-y-4">
         <p className="text-xs text-ink-500 leading-relaxed">{definition}</p>
 
-        {/* Indicators — interactive in rate phase, read-only summary in evidence phase */}
-        {phase === "rate" ? (
-          <div className="space-y-3">
-            {indicators.map((indText, idx) => (
-              <IndicatorRow
-                key={idx}
-                number={idx + 1}
-                text={indText}
-                indicator={draft.indicators[idx]}
-                disabled={isComplete}
-                onChange={(change) => onIndicator(idx, change)}
-              />
-            ))}
+        {/* Evidence notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-2xs uppercase tracking-wider font-semibold text-green-700 block mb-1.5">
+              What was done well
+            </label>
+            <textarea
+              value={draft.whatWasDoneWell ?? ""}
+              onChange={(e) => onNotes("whatWasDoneWell", e.target.value)}
+              disabled={isComplete}
+              placeholder="Specific evidence and examples observed."
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40"
+            />
           </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="text-2xs uppercase tracking-wider font-semibold text-ink-500">
-              Your ratings
-            </div>
-            {indicators.map((indText, idx) => (
-              <IndicatorReadOnlyRow
-                key={idx}
-                number={idx + 1}
-                text={indText}
-                indicator={draft.indicators[idx]}
-              />
-            ))}
+          <div>
+            <label className="text-2xs uppercase tracking-wider font-semibold text-amber-700 block mb-1.5">
+              What could have been better
+            </label>
+            <textarea
+              value={draft.whatCouldBeBetter ?? ""}
+              onChange={(e) => onNotes("whatCouldBeBetter", e.target.value)}
+              disabled={isComplete}
+              placeholder="Gaps, development areas, or moments to probe further."
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40"
+            />
           </div>
-        )}
+        </div>
 
-        {/* Notes — only shown in evidence phase */}
-        {phase === "evidence" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-ink-100">
-            <div>
-              <label className="text-2xs uppercase tracking-wider font-semibold text-green-700 block mb-1.5">
-                What was done well
-              </label>
-              <textarea
-                value={draft.whatWasDoneWell ?? ""}
-                onChange={(e) => onNotes("whatWasDoneWell", e.target.value)}
-                disabled={isComplete}
-                placeholder="Specific evidence and examples observed."
-                rows={4}
-                className="w-full px-3 py-2 text-sm border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40"
-              />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wider font-semibold text-amber-700 block mb-1.5">
-                What could have been better
-              </label>
-              <textarea
-                value={draft.whatCouldBeBetter ?? ""}
-                onChange={(e) => onNotes("whatCouldBeBetter", e.target.value)}
-                disabled={isComplete}
-                placeholder="Gaps, development areas, or moments to probe further."
-                rows={4}
-                className="w-full px-3 py-2 text-sm border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40"
-              />
-            </div>
-          </div>
-        )}
+        {/* Indicator ratings */}
+        <div className="space-y-3">
+          {indicators.map((indText, idx) => (
+            <IndicatorRow
+              key={idx}
+              number={idx + 1}
+              text={indText}
+              indicator={draft.indicators[idx]}
+              disabled={isComplete}
+              onChange={(change) => onIndicator(idx, change)}
+            />
+          ))}
+        </div>
       </CardBody>
     </Card>
-  );
-}
-
-// Read-only summary row used in the evidence phase
-function IndicatorReadOnlyRow({
-  number, text, indicator,
-}: { number: number; text: string; indicator: IndicatorScore }) {
-  const ratingDisplay = indicator.notObserved
-    ? "Not observed"
-    : indicator.rating !== undefined
-    ? `${indicator.rating}`
-    : "—";
-  const tone = indicator.notObserved ? "neutral" : indicator.rating !== undefined ? "ocean" : "neutral";
-
-  return (
-    <div className="flex items-start gap-3 py-2 px-3 rounded-md bg-ink-100/40">
-      <span className="text-2xs font-mono font-semibold text-ink-400 flex-shrink-0 mt-0.5">
-        {number}
-      </span>
-      <p className="flex-1 text-xs text-ink-700 leading-snug">{text}</p>
-      <Badge tone={tone as "neutral" | "ocean"}>
-        {ratingDisplay}
-      </Badge>
-    </div>
   );
 }
 

@@ -14,7 +14,7 @@ Every engagement has four sequential destinations, each implemented as a routed 
 
 1. **Setup** — 9 sequential steps configuring the engagement (engagement basics, competencies, proficiency targets, tools, aggregation rules, assessors, participants, schedule, report format). Locking the engagement is the gate that moves it from Draft to Live and unlocks Score.
 
-2. **Score** — Observer scoring of participants on tools. Observer persona switcher acts as a sign-in stub. Two-pass flow per participant: phase 1 rates indicators (1-5 + Not Observed), phase 2 captures evidence text. Phase state persists in URL as `?phase=rate|evidence`.
+2. **Score** — Observer scoring of participants on tools. Observer persona switcher acts as a sign-in stub. Single integrated screen per participant: each competency card shows evidence textareas at top, indicator rating rows (1-5 + Not Observed) below.
 
 3. **Calibrate** — Lead Assessor's workspace. Three stages: Reconcile (disagreement heatmap with drill-in), Moderate (per-participant profile review with overrides), Set OAR (5-band picker per participant). Sign-off locks Calibrate and unlocks Report.
 
@@ -140,7 +140,7 @@ Some parts of the codebase have implicit decisions baked in. Don't change these 
 - **The Zustand store schema version** (`version: 7`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
 - **The seed engagements** (`src/mocks/engagements.ts`). The FirstCry seed especially — three scoring records demonstrating empty / in-progress / complete states — is calibrated for demos. The Apollo seed is pre-signed-off on Calibrate so Report can be reviewed without doing the full Calibrate dance.
 - **The destination unlock logic** in `EngagementShell.tsx::isDestinationLocked`. It currently dims non-Setup destinations for Draft engagements. The internal lock gates on each landing handle finer-grained state. Don't add a third locking mechanism.
-- **The two-pass score flow** (rate vs evidence in `ScoreParticipantSheet.tsx`). This was an explicit product decision based on real Lead Assessor practice — splitting structured rating from qualitative evidence forces better thinking.
+- **The single-screen score flow** (`ScoreParticipantSheet.tsx`). Evidence textareas and indicator ratings are shown together per competency — merged from the previous two-pass design per MV's direction.
 - **The competency dictionary** in `src/mocks/dictionary.ts`. Sourced from the canonical `Competency_Map.xlsx`; changes here must round-trip back to that source.
 - **The OAR band thresholds** in `DEFAULT_AGGREGATION`. These are configurable per engagement but the defaults reflect Synovate's standard methodology.
 
