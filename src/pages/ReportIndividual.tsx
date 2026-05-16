@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
 import {
   ChevronLeft, CheckCircle2, Sparkles, Edit3,
-  Lock, FileText,
+  Lock, FileText, Download,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -126,6 +126,20 @@ INSTRUCTIONS
       setEditContent(prompt);
       setEditingSection(key);
     }
+  }
+
+  function downloadSectionAsMarkdown(key: ReportSectionKey) {
+    const section = getSection(key);
+    if (!section?.content || !activeParticipant) return;
+    const def = SECTION_DEFS.find((d) => d.key === key);
+    const md = `# ${def?.label}\n\n${section.content}`;
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeParticipant.name.replace(/\s+/g, "-")}-${key}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const oar = activePid ? computedOar(engagement, activePid) : null;
@@ -289,8 +303,13 @@ INSTRUCTIONS
                             {section.content}
                           </p>
                           {section.signedOffAt && (
-                            <div className="text-2xs text-ink-500 mt-3 not-prose">
-                              Signed off {new Date(section.signedOffAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                            <div className="flex items-center justify-between mt-3 not-prose">
+                              <div className="text-2xs text-ink-500">
+                                Signed off {new Date(section.signedOffAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                              </div>
+                              <Button size="sm" variant="ghost" onClick={() => downloadSectionAsMarkdown(def.key)}>
+                                <Download size={12} /> Download as Markdown
+                              </Button>
                             </div>
                           )}
                         </div>
