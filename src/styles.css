@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  body {
+    @apply text-ink-700;
+  }
+  .display-serif {
+    font-family: "Source Serif Pro", Georgia, serif;
+    font-feature-settings: "lnum", "kern";
+  }
+}
+
+@layer utilities {
+  /* Subtle gradient backdrop for the dashboard area */
+  .surface-canvas {
+    background-image:
+      radial-gradient(at 0% 0%, rgba(14, 116, 144, 0.04) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.03) 0px, transparent 50%);
+    background-color: #FAFBFC;
+  }
+}
