@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { BrandMark, AdminBadge } from "./Brand";
+import { BrandMark, AdminBadge, ModeSwitcher } from "./Brand";
 
 export function LandingShell() {
   return (
@@ -8,6 +8,7 @@ export function LandingShell() {
         <div className="max-w-[1400px] mx-auto px-8">
           <div className="flex items-center justify-between h-14">
             <BrandMark />
+            <ModeSwitcher />
             <AdminBadge />
           </div>
         </div>

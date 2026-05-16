@@ -9,18 +9,24 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AddEngagementModal } from "@/components/AddEngagementModal";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
 import type { Engagement, EngagementStatus } from "@/types";
 
 type StatusFilter = "all" | EngagementStatus;
 
 export function EngagementsLanding() {
-  const engagements = useAppStore((s) => s.engagements);
+  const allEngagements = useAppStore((s) => s.engagements);
+  const appMode = useAppMode();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [modalOpen, setModalOpen] = useState(false);
+
+  const engagements = useMemo(
+    () => appMode === "prod" ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)) : allEngagements,
+    [allEngagements, appMode],
+  );
 
   const filtered = useMemo(() => {
     return engagements.filter((e) => {

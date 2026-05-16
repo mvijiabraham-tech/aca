@@ -11,10 +11,21 @@ import type {
 import { DEFAULT_AGGREGATION, DEFAULT_REPORT_FORMAT, EMPTY_CALIBRATE_STATE, EMPTY_REPORT_STATE } from "@/types";
 import { seedEngagements } from "@/mocks/engagements";
 
+export type AppMode = "demo" | "prod";
+
+export const DEMO_ENGAGEMENT_IDS = new Set([
+  "eng-firstcry-cm-2026-11",
+  "eng-apollo-sl-2026-09",
+  "eng-levis-rm-2027-01",
+  "eng-tata-hipo-2027-02",
+]);
+
 interface AppState {
   engagements: Engagement[];
+  appMode: AppMode;
   // Persona for Score destination (which observer is currently acting)
   actingAsObserverId: Record<string, string | null>; // keyed by engagement id
+  setAppMode: (mode: AppMode) => void;
   addEngagement: (input: NewEngagementInput) => Engagement;
   resetAll: () => void;
   updateBasics: (id: string, basics: Partial<EngagementBasics>) => void;
@@ -104,7 +115,10 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       engagements: seedEngagements,
+      appMode: "demo" as AppMode,
       actingAsObserverId: {},
+
+      setAppMode: (mode) => set({ appMode: mode }),
 
       addEngagement: (input) => {
         const id = `eng-${input.code.toLowerCase().replace(/[^a-z0-9-]/g, "")}-${Date.now().toString(36)}`;
@@ -372,6 +386,8 @@ export const useAppStore = create<AppState>()(
 
 export const useEngagement = (id: string | undefined) =>
   useAppStore((s) => (id ? s.engagements.find((e) => e.id === id) : undefined));
+
+export const useAppMode = () => useAppStore((s) => s.appMode);
 
 // Returns the currently-acting observer id for an engagement; defaults to the Lead Assessor
 export const useActingObserverId = (engagementId: string | undefined): string | null => {

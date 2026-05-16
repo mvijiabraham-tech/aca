@@ -1,3 +1,31 @@
+import { cn } from "@/lib/cn";
+import { useAppMode, useAppStore } from "@/lib/store";
+import type { AppMode } from "@/lib/store";
+
+export function ModeSwitcher() {
+  const mode = useAppMode();
+  const setAppMode = useAppStore((s) => s.setAppMode);
+
+  return (
+    <div className="flex items-center gap-0.5 bg-ink-100 rounded-full p-0.5">
+      {(["demo", "prod"] as AppMode[]).map((m) => (
+        <button
+          key={m}
+          onClick={() => setAppMode(m)}
+          className={cn(
+            "px-3 py-1 rounded-full text-2xs font-medium transition-colors capitalize",
+            mode === m
+              ? "bg-navy-700 text-white shadow-sm"
+              : "text-ink-500 hover:text-navy-700",
+          )}
+        >
+          {m === "demo" ? "Demo" : "Prod"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function BrandMark() {
   return (
     <div className="flex items-center gap-2.5">

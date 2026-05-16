@@ -5,8 +5,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
-import { AdminBadge } from "./Brand";
-import { useEngagement, useAppStore } from "@/lib/store";
+import { AdminBadge, ModeSwitcher } from "./Brand";
+import { useEngagement, useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
 
 type Destination = {
   key: string;
@@ -26,7 +26,30 @@ export function EngagementShell() {
   const { engagementId } = useParams<{ engagementId: string }>();
   const navigate = useNavigate();
   const engagement = useEngagement(engagementId);
-  const totalEngagements = useAppStore((s) => s.engagements.length);
+  const appMode = useAppMode();
+  const totalEngagements = useAppStore((s) =>
+    appMode === "prod"
+      ? s.engagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)).length
+      : s.engagements.length,
+  );
+
+  // Redirect to home if viewing a demo engagement in prod mode
+  if (engagementId && appMode === "prod" && DEMO_ENGAGEMENT_IDS.has(engagementId)) {
+    return (
+      <div className="min-h-screen surface-canvas flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="display-serif text-2xl font-semibold text-navy-700">Demo engagement</div>
+          <p className="text-sm text-ink-500 mt-2">This engagement is only available in Demo mode.</p>
+          <button
+            onClick={() => navigate("/")}
+            className="mt-5 text-sm font-medium text-ocean-700 hover:text-ocean-800 inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft size={14} /> Back to engagements
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Defensive — if engagement isn't found, bounce back to landing
   if (!engagement) {
@@ -106,7 +129,10 @@ export function EngagementShell() {
               </div>
             </div>
 
-            <AdminBadge />
+            <div className="flex items-center gap-4">
+              <ModeSwitcher />
+              <AdminBadge />
+            </div>
           </div>
 
           {/* Destination tabs */}
