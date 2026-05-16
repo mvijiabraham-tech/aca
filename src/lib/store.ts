@@ -9,7 +9,6 @@ import type {
   ReportSection, FeedbackSession,
 } from "@/types";
 import { DEFAULT_AGGREGATION, DEFAULT_REPORT_FORMAT, EMPTY_CALIBRATE_STATE, EMPTY_REPORT_STATE } from "@/types";
-import { seedEngagements } from "@/mocks/engagements";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   debouncedPushEngagement,
@@ -17,23 +16,12 @@ import {
   debouncedPushScore,
 } from "@/lib/sync";
 
-export type AppMode = "demo" | "prod";
-
-export const DEMO_ENGAGEMENT_IDS = new Set([
-  "eng-firstcry-cm-2026-11",
-  "eng-apollo-sl-2026-09",
-  "eng-levis-rm-2027-01",
-  "eng-tata-hipo-2027-02",
-]);
-
 interface AppState {
   engagements: Engagement[];
-  appMode: AppMode;
   // Persona for Score destination (which observer is currently acting)
   actingAsObserverId: Record<string, string | null>; // keyed by engagement id
   // Whether we've hydrated from Supabase this session
   _hydrated: boolean;
-  setAppMode: (mode: AppMode) => void;
   addEngagement: (input: NewEngagementInput) => Engagement;
   resetAll: () => void;
   updateBasics: (id: string, basics: Partial<EngagementBasics>) => void;
@@ -124,8 +112,8 @@ function patchEngagement(
 }
 
 /** Should we sync this engagement to Supabase? */
-function shouldSync(state: { appMode: AppMode }, engagementId: string): boolean {
-  return state.appMode === "prod" && isSupabaseConfigured && !DEMO_ENGAGEMENT_IDS.has(engagementId);
+function shouldSync(): boolean {
+  return isSupabaseConfigured;
 }
 
 /** Get an engagement from the current state */
@@ -136,12 +124,9 @@ function getEngagement(engagements: Engagement[], id: string): Engagement | unde
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      engagements: seedEngagements,
-      appMode: "demo" as AppMode,
+      engagements: [],
       actingAsObserverId: {},
       _hydrated: false,
-
-      setAppMode: (mode) => set({ appMode: mode }),
 
       addEngagement: (input) => {
         const id = `eng-${input.code.toLowerCase().replace(/[^a-z0-9-]/g, "")}-${Date.now().toString(36)}`;
@@ -166,11 +151,11 @@ export const useAppStore = create<AppState>()(
         // Step 1 starts in_progress because they've provided name/code/client
         newEngagement.setupSteps[0].status = "in_progress";
         set((s) => ({ engagements: [newEngagement, ...s.engagements] }));
-        if (shouldSync(get(), id)) debouncedPushEngagement(newEngagement);
+        if (shouldSync()) debouncedPushEngagement(newEngagement);
         return newEngagement;
       },
 
-      resetAll: () => set({ engagements: seedEngagements }),
+      resetAll: () => set({ engagements: [] }),
 
       updateBasics: (id, basics) => {
         set((s) => ({
@@ -179,7 +164,7 @@ export const useAppStore = create<AppState>()(
             basics: { ...e.basics, ...basics },
           })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -193,7 +178,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, competencies: comps, proficiencyTargets: targets };
           }),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -205,7 +190,7 @@ export const useAppStore = create<AppState>()(
             ...e, proficiencyTargets: targets,
           })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -215,7 +200,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, tools })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -225,7 +210,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, aggregation: rules })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -235,7 +220,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, assessors })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -245,7 +230,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, participants })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -255,7 +240,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, schedule })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -265,7 +250,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, reportFormat })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -279,7 +264,7 @@ export const useAppStore = create<AppState>()(
             lockedAt: new Date().toISOString(),
           })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -293,7 +278,7 @@ export const useAppStore = create<AppState>()(
             lockedAt: undefined,
           })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -315,7 +300,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, scores: next };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           debouncedPushScore(engagementId, score);
         }
       },
@@ -358,7 +343,7 @@ export const useAppStore = create<AppState>()(
           }),
         }));
         // Push score to Supabase
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) {
             const scoreId = `${participantId}|${toolId}|${observerId}`;
@@ -383,7 +368,7 @@ export const useAppStore = create<AppState>()(
             };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) {
             const scoreId = `${participantId}|${toolId}|${observerId}`;
@@ -406,7 +391,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, calibrate: { ...e.calibrate, moderatedScores: next } };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -422,7 +407,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, calibrate: { ...e.calibrate, oars: next } };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -434,7 +419,7 @@ export const useAppStore = create<AppState>()(
             ...e, calibrate: { ...e.calibrate, stage },
           })),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -452,7 +437,7 @@ export const useAppStore = create<AppState>()(
             },
           })),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -471,7 +456,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, report: { ...e.report, sections: next } };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -487,7 +472,7 @@ export const useAppStore = create<AppState>()(
             return { ...e, report: { ...e.report, feedbackSessions: next } };
           }),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagement(eng);
         }
@@ -501,7 +486,7 @@ export const useAppStore = create<AppState>()(
             completedAt: new Date().toISOString(),
           })),
         }));
-        if (shouldSync(get(), engagementId)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, engagementId);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -516,7 +501,7 @@ export const useAppStore = create<AppState>()(
             ),
           })),
         }));
-        if (shouldSync(get(), id)) {
+        if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
           if (eng) debouncedPushEngagementMeta(eng);
         }
@@ -524,12 +509,7 @@ export const useAppStore = create<AppState>()(
 
       // Supabase sync actions
       hydrateFromSupabase: (engagements) => {
-        set((s) => {
-          // Merge: keep demo seeds, add/replace prod engagements
-          const demoEngs = s.engagements.filter((e) => DEMO_ENGAGEMENT_IDS.has(e.id));
-          const merged = [...demoEngs, ...engagements];
-          return { engagements: merged, _hydrated: true };
-        });
+        set({ engagements, _hydrated: true });
       },
 
       mergeRealtimeScore: (engagementId, score) => {
@@ -544,14 +524,12 @@ export const useAppStore = create<AppState>()(
         }));
       },
     }),
-    { name: "aca-v05-store", version: 9 },
+    { name: "aca-v05-store", version: 10 },
   ),
 );
 
 export const useEngagement = (id: string | undefined) =>
   useAppStore((s) => (id ? s.engagements.find((e) => e.id === id) : undefined));
-
-export const useAppMode = () => useAppStore((s) => s.appMode);
 
 // Returns the currently-acting observer id for an engagement; defaults to the Lead Assessor
 export const useActingObserverId = (engagementId: string | undefined): string | null => {

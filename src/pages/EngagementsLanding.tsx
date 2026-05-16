@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AddEngagementModal } from "@/components/AddEngagementModal";
-import { useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { hydrateFromSupabase } from "@/lib/sync";
@@ -18,8 +18,7 @@ import type { Engagement, EngagementStatus } from "@/types";
 type StatusFilter = "all" | EngagementStatus;
 
 export function EngagementsLanding() {
-  const allEngagements = useAppStore((s) => s.engagements);
-  const appMode = useAppMode();
+  const engagements = useAppStore((s) => s.engagements);
   const hydrated = useAppStore((s) => s._hydrated);
   const hydrateStore = useAppStore((s) => s.hydrateFromSupabase);
   const navigate = useNavigate();
@@ -30,25 +29,21 @@ export function EngagementsLanding() {
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // In prod mode with Supabase configured, hydrate from DB on mount
+  // Hydrate from Supabase on mount if configured
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || hydrated) return;
+    if (!isSupabaseConfigured || hydrated) return;
     setLoading(true);
     hydrateFromSupabase().then((engs) => {
       hydrateStore(engs);
       setLoading(false);
     });
-  }, [appMode, hydrated, hydrateStore]);
+  }, [hydrated, hydrateStore]);
 
   // Redirect observer-only users to /observe
   useEffect(() => {
     if (!profile) return;
-    const engagements = appMode === "prod"
-      ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id))
-      : allEngagements;
     if (engagements.length === 0) return;
     const userEmail = profile.email.toLowerCase();
-    // Check if this user only appears as "observer" role (never as lead/assessor)
     const engagementsWithUser = engagements.filter((e) =>
       e.assessors.some((a) => a.email.toLowerCase() === userEmail),
     );
@@ -60,12 +55,7 @@ export function EngagementsLanding() {
     if (isObserverOnly) {
       navigate("/observe", { replace: true });
     }
-  }, [appMode, profile, allEngagements, navigate]);
-
-  const engagements = useMemo(
-    () => appMode === "prod" ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)) : allEngagements,
-    [allEngagements, appMode],
-  );
+  }, [profile, engagements, navigate]);
 
   const filtered = useMemo(() => {
     return engagements.filter((e) => {

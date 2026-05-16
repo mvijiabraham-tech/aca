@@ -6,7 +6,6 @@ import {
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { ObserverPersonaSwitcher } from "@/components/ObserverPersonaSwitcher";
 import { useEngagement, useActingObserverId } from "@/lib/store";
 import {
   observerToolParticipants, findScore, computeScoringStatus,
@@ -64,7 +63,6 @@ export function ScoreCockpit() {
           </p>
         </div>
 
-        <ObserverPersonaSwitcher engagement={engagement} observerId={observerId} />
       </div>
 
       {/* Competencies surfaced */}

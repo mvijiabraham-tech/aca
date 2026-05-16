@@ -7,7 +7,7 @@ import {
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { useEngagement, useAppStore, useAppMode } from "@/lib/store";
+import { useEngagement, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { subscribeToScores } from "@/lib/sync";
@@ -21,7 +21,6 @@ export function ObserverToolList() {
   const engagement = useEngagement(engagementId);
   const mergeRealtimeScore = useAppStore((s) => s.mergeRealtimeScore);
   const setActingObserver = useAppStore((s) => s.setActingObserver);
-  const appMode = useAppMode();
   const { profile } = useAuth();
 
   // Resolve observer from auth profile email
@@ -41,17 +40,17 @@ export function ObserverToolList() {
 
   // Subscribe to Realtime score updates
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || !engagementId) return;
+    if (!isSupabaseConfigured || !engagementId) return;
     const unsub = subscribeToScores(engagementId, (score) => {
       mergeRealtimeScore(engagementId, score);
     });
     return unsub;
-  }, [appMode, engagementId, mergeRealtimeScore]);
+  }, [engagementId, mergeRealtimeScore]);
 
   if (!engagement) return null;
 
   // Validate observer email matches an assessor
-  if (appMode === "prod" && !observerId) {
+  if (!observerId) {
     return (
       <div className="text-center py-16">
         <div className="w-14 h-14 rounded-xl bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5">

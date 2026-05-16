@@ -1,33 +1,6 @@
-import { cn } from "@/lib/cn";
-import { useAppMode, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import type { AppMode } from "@/lib/store";
 import { LogOut } from "lucide-react";
-
-export function ModeSwitcher() {
-  const mode = useAppMode();
-  const setAppMode = useAppStore((s) => s.setAppMode);
-
-  return (
-    <div className="flex items-center gap-0.5 bg-ink-100 rounded-full p-0.5">
-      {(["demo", "prod"] as AppMode[]).map((m) => (
-        <button
-          key={m}
-          onClick={() => setAppMode(m)}
-          className={cn(
-            "px-3 py-1 rounded-full text-2xs font-medium transition-colors capitalize",
-            mode === m
-              ? "bg-navy-700 text-white shadow-sm"
-              : "text-ink-500 hover:text-navy-700",
-          )}
-        >
-          {m === "demo" ? "Demo" : "Prod"}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function BrandMark() {
   return (
@@ -46,11 +19,9 @@ export function BrandMark() {
 }
 
 export function AdminBadge() {
-  const appMode = useAppMode();
   const { profile, signOut } = useAuth();
 
-  // In prod mode with Supabase configured, show authenticated user
-  if (appMode === "prod" && isSupabaseConfigured && profile) {
+  if (isSupabaseConfigured && profile) {
     const initials = profile.full_name
       .split(" ")
       .map((w) => w[0])
@@ -78,16 +49,5 @@ export function AdminBadge() {
     );
   }
 
-  // Demo mode or no auth — show static admin badge
-  return (
-    <div className="flex items-center gap-3">
-      <div className="text-right">
-        <div className="text-2xs text-ink-500">Admin</div>
-        <div className="text-sm font-medium text-navy-700">MV</div>
-      </div>
-      <div className="w-8 h-8 rounded-md bg-ocean-100 text-ocean-800 flex items-center justify-center text-2xs font-semibold">
-        MV
-      </div>
-    </div>
-  );
+  return null;
 }

@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { CompetencyScoreCard, SaveBadge } from "@/components/scoring/ScoringWidgets";
-import { useEngagement, useActingObserverId, useAppStore, useAppMode } from "@/lib/store";
+import { useEngagement, useActingObserverId, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
@@ -31,19 +31,18 @@ export function ScoreParticipantSheet() {
   const updateCompetencyScore = useAppStore((s) => s.updateCompetencyScore);
   const markScoreComplete = useAppStore((s) => s.markScoreComplete);
   const setActingObserver = useAppStore((s) => s.setActingObserver);
-  const appMode = useAppMode();
   const { profile } = useAuth();
 
-  // In prod mode, auto-resolve observer from auth profile email
+  // Auto-resolve observer from auth profile email
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || !engagement || !profile) return;
+    if (!isSupabaseConfigured || !engagement || !profile) return;
     const match = engagement.assessors.find(
       (a) => a.email.toLowerCase() === profile.email.toLowerCase(),
     );
     if (match && match.id !== observerId) {
       setActingObserver(engagement.id, match.id);
     }
-  }, [appMode, engagement, profile, observerId, setActingObserver]);
+  }, [engagement, profile, observerId, setActingObserver]);
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});

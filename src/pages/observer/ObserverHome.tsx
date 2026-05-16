@@ -5,44 +5,38 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { BrandMark } from "@/components/layout/Brand";
-import { useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { hydrateFromSupabase } from "@/lib/sync";
 
 export function ObserverHome() {
   const allEngagements = useAppStore((s) => s.engagements);
-  const appMode = useAppMode();
   const hydrated = useAppStore((s) => s._hydrated);
   const hydrateStore = useAppStore((s) => s.hydrateFromSupabase);
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
 
-  // Hydrate from Supabase in prod mode
+  // Hydrate from Supabase if configured
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || hydrated) return;
+    if (!isSupabaseConfigured || hydrated) return;
     hydrateFromSupabase().then((engs) => {
       hydrateStore(engs);
     });
-  }, [appMode, hydrated, hydrateStore]);
+  }, [hydrated, hydrateStore]);
 
-  // In prod mode, require a valid profile with email
-  const emailVerified = appMode === "demo" || !!profile;
+  const emailVerified = !!profile;
 
   // Filter to live/complete engagements where observer's email matches an assessor
   const myEngagements = useMemo(() => {
-    const engagements = appMode === "prod"
-      ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id))
-      : allEngagements;
-
-    return engagements.filter((e) => {
+    return allEngagements.filter((e) => {
       if (e.status === "draft") return false;
-      if (!profile) return true; // In demo mode show all non-draft
+      if (!profile) return false;
       return e.assessors.some(
         (a) => a.email.toLowerCase() === profile.email.toLowerCase(),
       );
     });
-  }, [allEngagements, appMode, profile]);
+  }, [allEngagements, profile]);
 
   // Auto-redirect if single engagement
   useEffect(() => {

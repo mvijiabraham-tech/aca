@@ -8,8 +8,7 @@ import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ObserverPersonaSwitcher } from "@/components/ObserverPersonaSwitcher";
-import { useEngagement, useActingObserverId, useAppStore, useAppMode } from "@/lib/store";
+import { useEngagement, useActingObserverId, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { subscribeToScores } from "@/lib/sync";
@@ -24,28 +23,27 @@ export function ScoreLanding() {
   const observerId = useActingObserverId(engagementId);
   const setActingObserver = useAppStore((s) => s.setActingObserver);
   const mergeRealtimeScore = useAppStore((s) => s.mergeRealtimeScore);
-  const appMode = useAppMode();
   const { profile } = useAuth();
 
-  // In prod mode, auto-resolve observer from auth profile email
+  // Auto-resolve observer from auth profile email
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || !engagement || !profile) return;
+    if (!isSupabaseConfigured || !engagement || !profile) return;
     const match = engagement.assessors.find(
       (a) => a.email.toLowerCase() === profile.email.toLowerCase(),
     );
     if (match && match.id !== observerId) {
       setActingObserver(engagement.id, match.id);
     }
-  }, [appMode, engagement, profile, observerId, setActingObserver]);
+  }, [engagement, profile, observerId, setActingObserver]);
 
   // Subscribe to Realtime score updates from other observers
   useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || !engagementId) return;
+    if (!isSupabaseConfigured || !engagementId) return;
     const unsub = subscribeToScores(engagementId, (score) => {
       mergeRealtimeScore(engagementId, score);
     });
     return unsub;
-  }, [appMode, engagementId, mergeRealtimeScore]);
+  }, [engagementId, mergeRealtimeScore]);
 
   if (!engagement) return null;
 
@@ -75,7 +73,6 @@ export function ScoreLanding() {
           </p>
         </div>
 
-        <ObserverPersonaSwitcher engagement={engagement} observerId={observerId} />
       </div>
 
       {/* Acting observer status */}
@@ -240,14 +237,6 @@ export function ScoreLanding() {
         </div>
       )}
 
-      {/* Footnote — for the demo (hidden in prod mode) */}
-      {appMode === "demo" && (
-        <div className="mt-6 text-2xs text-ink-500 max-w-2xl leading-relaxed">
-          <span className="font-semibold">For demo purposes:</span> the persona switcher above lets you act as different observers
-          to see how the same Score destination shows different tools and participants depending on who's logged in.
-          In production, each observer logs in as themselves and sees only their assigned tools.
-        </div>
-      )}
     </div>
   );
 }

@@ -1,18 +1,16 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { useAppMode } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 /**
- * Wraps routes that require authentication in prod mode.
- * In demo mode or when Supabase isn't configured, passes through.
+ * Wraps routes that require authentication.
+ * When Supabase isn't configured, passes through (dev/bypass mode).
  */
 export function AuthGuard() {
   const { user, loading } = useAuth();
-  const appMode = useAppMode();
 
-  // Demo mode or Supabase not configured — no auth required
-  if (appMode === "demo" || !isSupabaseConfigured) {
+  // Supabase not configured — no auth required
+  if (!isSupabaseConfigured) {
     return <Outlet />;
   }
 
