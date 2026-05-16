@@ -2,9 +2,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
 import {
   ChevronLeft, CheckCircle2, Sparkles, Edit3,
-  Lock, FileText, Download,
+  Lock, FileText, Download, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { generateWithClaude } from "@/lib/ai";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +39,8 @@ export function ReportIndividual() {
   const [editingSection, setEditingSection] = useState<ReportSectionKey | null>(null);
   const [editContent, setEditContent] = useState("");
   const [promptCopied, setPromptCopied] = useState<string | null>(null);
+  const [draftingSection, setDraftingSection] = useState<ReportSectionKey | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   if (!engagement) return null;
 
@@ -126,6 +129,36 @@ INSTRUCTIONS
       setEditContent(prompt);
       setEditingSection(key);
     }
+  }
+
+  async function draftWithAI(key: ReportSectionKey) {
+    const prompt = generatePrompt(key);
+    if (!prompt) return;
+
+    setDraftingSection(key);
+    setDraftError(null);
+
+    const result = await generateWithClaude(prompt);
+
+    setDraftingSection(null);
+
+    if ("error" in result) {
+      setDraftError(result.error);
+      // Fallback: copy prompt to clipboard so user can paste into external model
+      try {
+        await navigator.clipboard.writeText(prompt);
+      } catch {
+        // Clipboard also failed — open edit with the prompt text
+        setEditContent(prompt);
+        setEditingSection(key);
+        return;
+      }
+      return;
+    }
+
+    // Success — open edit mode with the AI response pre-filled
+    setEditContent(result.content);
+    setEditingSection(key);
   }
 
   function downloadSectionAsMarkdown(key: ReportSectionKey) {
@@ -262,6 +295,18 @@ INSTRUCTIONS
                       </div>
                       {!isEditing && (
                         <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => draftWithAI(def.key)}
+                            disabled={draftingSection !== null}
+                          >
+                            {draftingSection === def.key ? (
+                              <><Loader2 size={12} className="animate-spin" /> Drafting…</>
+                            ) : (
+                              <><Sparkles size={12} /> Draft with AI</>
+                            )}
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => copyPrompt(def.key)}>
                             {promptCopied === def.key ? (
                               <><CheckCircle2 size={12} /> Copied</>
@@ -276,6 +321,14 @@ INSTRUCTIONS
                       )}
                     </div>
                     <CardBody>
+                      {draftError && !isEditing && draftingSection === null && (
+                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+                          <span className="font-medium">AI drafting failed:</span> {draftError}
+                          <span className="block mt-1 text-2xs text-amber-600">
+                            Prompt copied to clipboard — paste into your preferred AI model instead.
+                          </span>
+                        </div>
+                      )}
                       {isEditing ? (
                         <div className="space-y-3">
                           <textarea
