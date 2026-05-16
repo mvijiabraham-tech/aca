@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Search, Calendar, Users, ChevronRight,
@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AddEngagementModal } from "@/components/AddEngagementModal";
 import { useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { hydrateFromSupabase } from "@/lib/sync";
 import type { Engagement, EngagementStatus } from "@/types";
 
 type StatusFilter = "all" | EngagementStatus;
@@ -17,11 +19,24 @@ type StatusFilter = "all" | EngagementStatus;
 export function EngagementsLanding() {
   const allEngagements = useAppStore((s) => s.engagements);
   const appMode = useAppMode();
+  const hydrated = useAppStore((s) => s._hydrated);
+  const hydrateStore = useAppStore((s) => s.hydrateFromSupabase);
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // In prod mode with Supabase configured, hydrate from DB on mount
+  useEffect(() => {
+    if (appMode !== "prod" || !isSupabaseConfigured || hydrated) return;
+    setLoading(true);
+    hydrateFromSupabase().then((engs) => {
+      hydrateStore(engs);
+      setLoading(false);
+    });
+  }, [appMode, hydrated, hydrateStore]);
 
   const engagements = useMemo(
     () => appMode === "prod" ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)) : allEngagements,
@@ -101,7 +116,12 @@ export function EngagementsLanding() {
       </div>
 
       {/* Results */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="py-16 text-center">
+          <div className="w-8 h-8 border-2 border-ocean-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-ink-500 mt-4">Loading engagements…</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState onAdd={() => setModalOpen(true)} hasAny={engagements.length > 0} />
       ) : (
         <div className="space-y-3">

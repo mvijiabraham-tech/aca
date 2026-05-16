@@ -10,6 +10,12 @@ import type {
 } from "@/types";
 import { DEFAULT_AGGREGATION, DEFAULT_REPORT_FORMAT, EMPTY_CALIBRATE_STATE, EMPTY_REPORT_STATE } from "@/types";
 import { seedEngagements } from "@/mocks/engagements";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+  debouncedPushEngagement,
+  debouncedPushEngagementMeta,
+  debouncedPushScore,
+} from "@/lib/sync";
 
 export type AppMode = "demo" | "prod";
 
@@ -25,6 +31,8 @@ interface AppState {
   appMode: AppMode;
   // Persona for Score destination (which observer is currently acting)
   actingAsObserverId: Record<string, string | null>; // keyed by engagement id
+  // Whether we've hydrated from Supabase this session
+  _hydrated: boolean;
   setAppMode: (mode: AppMode) => void;
   addEngagement: (input: NewEngagementInput) => Engagement;
   resetAll: () => void;
@@ -66,6 +74,10 @@ interface AppState {
   upsertReportSection: (engagementId: string, section: ReportSection) => void;
   upsertFeedbackSession: (engagementId: string, session: FeedbackSession) => void;
   markEngagementComplete: (engagementId: string) => void;
+  // Supabase sync
+  hydrateFromSupabase: (engagements: Engagement[]) => void;
+  /** Merge a single score from Realtime (another observer's update) */
+  mergeRealtimeScore: (engagementId: string, score: ParticipantToolScore) => void;
 }
 
 const blankSteps: Omit<SetupStep, "status" | "summary">[] = [
@@ -111,12 +123,23 @@ function patchEngagement(
   return engagements.map((e) => (e.id === id ? patch(e) : e));
 }
 
+/** Should we sync this engagement to Supabase? */
+function shouldSync(state: { appMode: AppMode }, engagementId: string): boolean {
+  return state.appMode === "prod" && isSupabaseConfigured && !DEMO_ENGAGEMENT_IDS.has(engagementId);
+}
+
+/** Get an engagement from the current state */
+function getEngagement(engagements: Engagement[], id: string): Engagement | undefined {
+  return engagements.find((e) => e.id === id);
+}
+
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       engagements: seedEngagements,
       appMode: "demo" as AppMode,
       actingAsObserverId: {},
+      _hydrated: false,
 
       setAppMode: (mode) => set({ appMode: mode }),
 
@@ -143,82 +166,138 @@ export const useAppStore = create<AppState>()(
         // Step 1 starts in_progress because they've provided name/code/client
         newEngagement.setupSteps[0].status = "in_progress";
         set((s) => ({ engagements: [newEngagement, ...s.engagements] }));
+        if (shouldSync(get(), id)) debouncedPushEngagement(newEngagement);
         return newEngagement;
       },
 
       resetAll: () => set({ engagements: seedEngagements }),
 
-      updateBasics: (id, basics) =>
+      updateBasics: (id, basics) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({
             ...e,
             basics: { ...e.basics, ...basics },
           })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setCompetencies: (id, comps) =>
+      setCompetencies: (id, comps) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => {
             const compIds = new Set(comps.map((c) => c.competencyId));
             const targets = e.proficiencyTargets.filter((t) => compIds.has(t.competencyId));
             return { ...e, competencies: comps, proficiencyTargets: targets };
           }),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setProficiencyTargets: (id, targets) =>
+      setProficiencyTargets: (id, targets) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({
             ...e, proficiencyTargets: targets,
           })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setTools: (id, tools) =>
+      setTools: (id, tools) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, tools })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      setAggregation: (id, rules) =>
+      setAggregation: (id, rules) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, aggregation: rules })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setAssessors: (id, assessors) =>
+      setAssessors: (id, assessors) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, assessors })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      setParticipants: (id, participants) =>
+      setParticipants: (id, participants) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, participants })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      setSchedule: (id, schedule) =>
+      setSchedule: (id, schedule) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, schedule })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setReportFormat: (id, reportFormat) =>
+      setReportFormat: (id, reportFormat) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, reportFormat })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      lockEngagement: (id) =>
+      lockEngagement: (id) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({
             ...e,
             status: "live",
             lockedAt: new Date().toISOString(),
           })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      unlockEngagement: (id) =>
+      unlockEngagement: (id) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({
             ...e,
             status: "draft",
             lockedAt: undefined,
           })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
       // Pass 4 — scoring actions
       setActingObserver: (engagementId, observerId) =>
@@ -226,7 +305,7 @@ export const useAppStore = create<AppState>()(
           actingAsObserverId: { ...s.actingAsObserverId, [engagementId]: observerId },
         })),
 
-      upsertScore: (engagementId, score) =>
+      upsertScore: (engagementId, score) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const existing = e.scores.find((sc) => sc.id === score.id);
@@ -235,9 +314,13 @@ export const useAppStore = create<AppState>()(
               : [...e.scores, score];
             return { ...e, scores: next };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          debouncedPushScore(engagementId, score);
+        }
+      },
 
-      updateCompetencyScore: (engagementId, participantId, toolId, observerId, competencyScore) =>
+      updateCompetencyScore: (engagementId, participantId, toolId, observerId, competencyScore) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const scoreId = `${participantId}|${toolId}|${observerId}`;
@@ -273,9 +356,19 @@ export const useAppStore = create<AppState>()(
             };
             return { ...e, scores: e.scores.map((sc) => (sc.id === scoreId ? updated : sc)) };
           }),
-        })),
+        }));
+        // Push score to Supabase
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) {
+            const scoreId = `${participantId}|${toolId}|${observerId}`;
+            const score = eng.scores.find((sc) => sc.id === scoreId);
+            if (score) debouncedPushScore(engagementId, score);
+          }
+        }
+      },
 
-      markScoreComplete: (engagementId, participantId, toolId, observerId, complete) =>
+      markScoreComplete: (engagementId, participantId, toolId, observerId, complete) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const scoreId = `${participantId}|${toolId}|${observerId}`;
@@ -289,10 +382,19 @@ export const useAppStore = create<AppState>()(
               ),
             };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) {
+            const scoreId = `${participantId}|${toolId}|${observerId}`;
+            const score = eng.scores.find((sc) => sc.id === scoreId);
+            if (score) debouncedPushScore(engagementId, score);
+          }
+        }
+      },
 
       // Pass 5 — Calibrate
-      upsertModeratedScore: (engagementId, score) =>
+      upsertModeratedScore: (engagementId, score) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const existing = e.calibrate.moderatedScores.findIndex(
@@ -303,9 +405,14 @@ export const useAppStore = create<AppState>()(
               : e.calibrate.moderatedScores.map((m, i) => i === existing ? score : m);
             return { ...e, calibrate: { ...e.calibrate, moderatedScores: next } };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      upsertOar: (engagementId, oar) =>
+      upsertOar: (engagementId, oar) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const existing = e.calibrate.oars.findIndex((o) => o.participantId === oar.participantId);
@@ -314,16 +421,26 @@ export const useAppStore = create<AppState>()(
               : e.calibrate.oars.map((o, i) => i === existing ? oar : o);
             return { ...e, calibrate: { ...e.calibrate, oars: next } };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setCalibrateStage: (engagementId, stage) =>
+      setCalibrateStage: (engagementId, stage) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => ({
             ...e, calibrate: { ...e.calibrate, stage },
           })),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      signOffCalibrate: (engagementId, byObserverId) =>
+      signOffCalibrate: (engagementId, byObserverId) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => ({
             ...e,
@@ -334,10 +451,15 @@ export const useAppStore = create<AppState>()(
               signedOffAt: new Date().toISOString(),
             },
           })),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
       // Pass 6 — Report
-      upsertReportSection: (engagementId, section) =>
+      upsertReportSection: (engagementId, section) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const existing = e.report.sections.findIndex(
@@ -348,9 +470,14 @@ export const useAppStore = create<AppState>()(
               : e.report.sections.map((sec, i) => i === existing ? section : sec);
             return { ...e, report: { ...e.report, sections: next } };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      upsertFeedbackSession: (engagementId, session) =>
+      upsertFeedbackSession: (engagementId, session) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => {
             const existing = e.report.feedbackSessions.findIndex((fs) => fs.participantId === session.participantId);
@@ -359,18 +486,28 @@ export const useAppStore = create<AppState>()(
               : e.report.feedbackSessions.map((fs, i) => i === existing ? session : fs);
             return { ...e, report: { ...e.report, feedbackSessions: next } };
           }),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
 
-      markEngagementComplete: (engagementId) =>
+      markEngagementComplete: (engagementId) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, engagementId, (e) => ({
             ...e,
             status: "complete",
             completedAt: new Date().toISOString(),
           })),
-        })),
+        }));
+        if (shouldSync(get(), engagementId)) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
 
-      setStepStatus: (id, stepKey, status, summary) =>
+      setStepStatus: (id, stepKey, status, summary) => {
         set((s) => ({
           engagements: patchEngagement(s.engagements, id, (e) => ({
             ...e,
@@ -378,9 +515,36 @@ export const useAppStore = create<AppState>()(
               step.key === stepKey ? { ...step, status, summary: summary ?? step.summary } : step,
             ),
           })),
-        })),
+        }));
+        if (shouldSync(get(), id)) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
+
+      // Supabase sync actions
+      hydrateFromSupabase: (engagements) => {
+        set((s) => {
+          // Merge: keep demo seeds, add/replace prod engagements
+          const demoEngs = s.engagements.filter((e) => DEMO_ENGAGEMENT_IDS.has(e.id));
+          const merged = [...demoEngs, ...engagements];
+          return { engagements: merged, _hydrated: true };
+        });
+      },
+
+      mergeRealtimeScore: (engagementId, score) => {
+        set((s) => ({
+          engagements: patchEngagement(s.engagements, engagementId, (e) => {
+            const existing = e.scores.findIndex((sc) => sc.id === score.id);
+            const next = existing === -1
+              ? [...e.scores, score]
+              : e.scores.map((sc, i) => (i === existing ? score : sc));
+            return { ...e, scores: next };
+          }),
+        }));
+      },
     }),
-    { name: "aca-v05-store", version: 7 },
+    { name: "aca-v05-store", version: 8 },
   ),
 );
 

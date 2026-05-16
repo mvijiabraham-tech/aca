@@ -1,6 +1,9 @@
 import { cn } from "@/lib/cn";
 import { useAppMode, useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { AppMode } from "@/lib/store";
+import { LogOut } from "lucide-react";
 
 export function ModeSwitcher() {
   const mode = useAppMode();
@@ -43,6 +46,39 @@ export function BrandMark() {
 }
 
 export function AdminBadge() {
+  const appMode = useAppMode();
+  const { profile, signOut } = useAuth();
+
+  // In prod mode with Supabase configured, show authenticated user
+  if (appMode === "prod" && isSupabaseConfigured && profile) {
+    const initials = profile.full_name
+      .split(" ")
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+
+    return (
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <div className="text-2xs text-ink-500">{profile.organisation ?? "Assessor"}</div>
+          <div className="text-sm font-medium text-navy-700">{profile.full_name}</div>
+        </div>
+        <div className="w-8 h-8 rounded-md bg-ocean-100 text-ocean-800 flex items-center justify-center text-2xs font-semibold">
+          {initials}
+        </div>
+        <button
+          onClick={signOut}
+          title="Sign out"
+          className="p-1.5 rounded-md text-ink-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <LogOut size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  // Demo mode or no auth — show static admin badge
   return (
     <div className="flex items-center gap-3">
       <div className="text-right">

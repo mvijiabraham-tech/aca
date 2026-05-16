@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { AuthProvider } from "@/lib/auth";
+import { AuthGuard } from "@/components/AuthGuard";
 import { LandingShell } from "@/components/layout/LandingShell";
 import { EngagementShell } from "@/components/layout/EngagementShell";
 import { EngagementsLanding } from "@/pages/EngagementsLanding";
+import { LoginPage } from "@/pages/LoginPage";
 import { SetupDashboard } from "@/pages/SetupDashboard";
 import { SetupStepStub } from "@/pages/SetupStepStub";
 import { StepEngagementBasics } from "@/pages/steps/StepEngagementBasics";
@@ -46,32 +49,40 @@ function StepRouter() {
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<LandingShell />}>
-          <Route index element={<EngagementsLanding />} />
-        </Route>
+      <AuthProvider>
+        <Routes>
+          {/* Public route — login */}
+          <Route path="/login" element={<LoginPage />} />
 
-        <Route path="/engagement/:engagementId" element={<EngagementShell />}>
-          <Route index element={<Navigate to="setup" replace />} />
-          <Route path="setup" element={<SetupDashboard />} />
-          <Route path="setup/wizard" element={<SetupWizard />} />
-          <Route path="setup/lock" element={<LockReview />} />
-          <Route path="setup/:stepKey" element={<StepRouter />} />
-          <Route path="score" element={<ScoreLanding />} />
-          <Route path="score/:toolId" element={<ScoreCockpit />} />
-          <Route path="score/:toolId/:participantId" element={<ScoreParticipantSheet />} />
-          <Route path="calibrate" element={<CalibrateLanding />} />
-          <Route path="calibrate/reconcile" element={<CalibrateReconcile />} />
-          <Route path="calibrate/moderate" element={<CalibrateModerate />} />
-          <Route path="calibrate/oar" element={<CalibrateOar />} />
-          <Route path="report" element={<ReportLanding />} />
-          <Route path="report/individual" element={<ReportIndividual />} />
-          <Route path="report/group" element={<ReportGroup />} />
-          <Route path="report/feedback" element={<ReportFeedback />} />
-        </Route>
+          {/* Protected routes — AuthGuard checks auth in prod mode */}
+          <Route element={<AuthGuard />}>
+            <Route element={<LandingShell />}>
+              <Route index element={<EngagementsLanding />} />
+            </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            <Route path="/engagement/:engagementId" element={<EngagementShell />}>
+              <Route index element={<Navigate to="setup" replace />} />
+              <Route path="setup" element={<SetupDashboard />} />
+              <Route path="setup/wizard" element={<SetupWizard />} />
+              <Route path="setup/lock" element={<LockReview />} />
+              <Route path="setup/:stepKey" element={<StepRouter />} />
+              <Route path="score" element={<ScoreLanding />} />
+              <Route path="score/:toolId" element={<ScoreCockpit />} />
+              <Route path="score/:toolId/:participantId" element={<ScoreParticipantSheet />} />
+              <Route path="calibrate" element={<CalibrateLanding />} />
+              <Route path="calibrate/reconcile" element={<CalibrateReconcile />} />
+              <Route path="calibrate/moderate" element={<CalibrateModerate />} />
+              <Route path="calibrate/oar" element={<CalibrateOar />} />
+              <Route path="report" element={<ReportLanding />} />
+              <Route path="report/individual" element={<ReportIndividual />} />
+              <Route path="report/group" element={<ReportGroup />} />
+              <Route path="report/feedback" element={<ReportFeedback />} />
+            </Route>
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ChevronDown, User, ShieldCheck, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, useAppMode } from "@/lib/store";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { Engagement } from "@/types";
 
 interface ObserverPersonaSwitcherProps {
@@ -18,9 +19,32 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function ObserverPersonaSwitcher({ engagement, observerId }: ObserverPersonaSwitcherProps) {
   const setActingObserver = useAppStore((s) => s.setActingObserver);
+  const appMode = useAppMode();
   const [open, setOpen] = useState(false);
 
   const current = engagement.assessors.find((a) => a.id === observerId);
+
+  // In prod mode with Supabase, observer is resolved from auth — show read-only badge
+  if (appMode === "prod" && isSupabaseConfigured && current) {
+    return (
+      <div className="flex items-center gap-2.5 px-3 py-2 bg-white border border-ink-200 rounded-md">
+        <div className="w-7 h-7 rounded-md bg-ocean-50 text-ocean-800 flex items-center justify-center text-2xs font-semibold flex-shrink-0">
+          {initials(current.name)}
+        </div>
+        <div className="min-w-0">
+          <div className="text-2xs text-ink-500 leading-tight uppercase tracking-wider font-medium">
+            Logged in as
+          </div>
+          <div className="text-sm font-semibold text-navy-700 leading-tight truncate">
+            {current.name}
+          </div>
+        </div>
+        <Badge tone={current.role === "lead" ? "navy" : current.role === "assessor" ? "ocean" : "neutral"} className="ml-1">
+          {ROLE_LABEL[current.role]}
+        </Badge>
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
