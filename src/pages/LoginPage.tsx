@@ -9,6 +9,7 @@ const ALLOWED_EMAILS = new Set([
   "mvijiabraham@gmail.com",
   "alex@synovate.co.in",
   "cyril@synovate.co.in",
+  "abraham@synovate.co.in",
 ]);
 
 export function LoginPage() {
