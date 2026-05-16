@@ -4,7 +4,7 @@ This file is read at the start of every Claude Code session. Read it fully befor
 
 ## What this project is
 
-ACA (Assessment Centre Application) is a Synovate-internal tool for running end-to-end Assessment Centre engagements. It's a React + Vite + TypeScript single-page app currently at v1.0, built as a prototype to demonstrate the full Synovate AC workflow. There is no backend; everything persists via Zustand + localStorage.
+ACA (Assessment Centre Application) is a Synovate-internal tool for running end-to-end Assessment Centre engagements. It's a React + Vite + TypeScript single-page app currently at v1.0. State persists via Zustand + localStorage locally, with Supabase as the production backend for engagement data, scores, and auth.
 
 Synovate is MV's consulting firm. Actifyr (also MV's) is the behaviour-activation platform that ACA hands off to at the end of an engagement.
 
@@ -14,7 +14,7 @@ Every engagement has four sequential destinations, each implemented as a routed 
 
 1. **Setup** — 9 sequential steps configuring the engagement (engagement basics, competencies, proficiency targets, tools, aggregation rules, assessors, participants, schedule, report format). Locking the engagement is the gate that moves it from Draft to Live and unlocks Score.
 
-2. **Score** — Observer scoring of participants on tools. Observer persona switcher acts as a sign-in stub. Single integrated screen per participant: each competency card shows evidence textareas at top, indicator rating rows (1-5 + Not Observed) below.
+2. **Score** — Observer scoring of participants on tools. Each observer logs in and is auto-resolved to their assessor record by email. Single integrated screen per participant: each competency card shows evidence textareas at top, indicator rating rows (1-5 + Not Observed) below.
 
 3. **Calibrate** — Lead Assessor's workspace. Three stages: Reconcile (disagreement heatmap with drill-in), Moderate (per-participant profile review with overrides), Set OAR (5-band picker per participant). Sign-off locks Calibrate and unlocks Report.
 
@@ -31,7 +31,6 @@ src/
 │   │   ├── LandingShell.tsx           # Layout for the engagements list page
 │   │   └── EngagementShell.tsx        # Layout for any /engagement/:id page (destination tabs)
 │   ├── ui/                            # Card, Button, Badge — the design system primitives
-│   ├── ObserverPersonaSwitcher.tsx    # "Acting as observer" picker
 │   ├── AddEngagementModal.tsx
 │   └── StepPageHeader.tsx
 ├── pages/
@@ -39,7 +38,7 @@ src/
 │   ├── SetupDashboard.tsx             # Setup landing showing the 9-step grid
 │   ├── SetupWizard.tsx                # Guided multi-step setup flow
 │   ├── LockReview.tsx                 # Lock confirmation page
-│   ├── ScoreLanding.tsx               # Score destination landing (observer picker + tools)
+│   ├── ScoreLanding.tsx               # Score destination landing (tools list)
 │   ├── ScoreCockpit.tsx               # Per-tool view (participant list)
 │   ├── ScoreParticipantSheet.tsx      # Per-participant two-pass rating + evidence sheet
 │   ├── CalibrateLanding.tsx           # Calibrate destination landing
@@ -58,8 +57,7 @@ src/
 │   └── calibrate.ts                   # Calibrate-destination helper computations
 ├── mocks/
 │   ├── dictionary.ts                  # Competency dictionary (from Competency_Map.xlsx)
-│   ├── toolLibrary.ts                 # AC tool catalog
-│   └── engagements.ts                 # Seed engagements (FirstCry/Levi/Tata/Apollo)
+│   └── toolLibrary.ts                 # AC tool catalog
 ├── types/
 │   └── index.ts                       # All TypeScript types in one file
 ├── App.tsx                            # Routes
@@ -69,7 +67,9 @@ src/
 
 ## State and store
 
-There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 7) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
+There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 10) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
+
+Engagements default to `[]` and are hydrated from Supabase on mount when configured. The store syncs mutations to Supabase via debounced push functions whenever `isSupabaseConfigured` is true. When Supabase is not configured (local dev), the app runs fully offline with localStorage only.
 
 Store actions are organised by destination:
 
@@ -137,8 +137,7 @@ The build must be clean before any commit. TypeScript is strict; no errors, no w
 
 Some parts of the codebase have implicit decisions baked in. Don't change these without raising them first:
 
-- **The Zustand store schema version** (`version: 7`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
-- **The seed engagements** (`src/mocks/engagements.ts`). The FirstCry seed especially — three scoring records demonstrating empty / in-progress / complete states — is calibrated for demos. The Apollo seed is pre-signed-off on Calibrate so Report can be reviewed without doing the full Calibrate dance.
+- **The Zustand store schema version** (`version: 10`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
 - **The destination unlock logic** in `EngagementShell.tsx::isDestinationLocked`. It currently dims non-Setup destinations for Draft engagements. The internal lock gates on each landing handle finer-grained state. Don't add a third locking mechanism.
 - **The single-screen score flow** (`ScoreParticipantSheet.tsx`). Evidence textareas and indicator ratings are shown together per competency — merged from the previous two-pass design per MV's direction.
 - **The competency dictionary** in `src/mocks/dictionary.ts`. Sourced from the canonical `Competency_Map.xlsx`; changes here must round-trip back to that source.
@@ -151,7 +150,6 @@ These are not bugs; they're conscious deferrals:
 - **AI drafting in Report Individual** is prompt generation, not direct API calls. Coach pastes into Claude or preferred model externally.
 - **Activation handoff to Actifyr** shows the payload on screen but no actual POST.
 - **PDF / PPTX export** of individual reports is not yet implemented.
-- **Real authentication** — observer picker is a deliberate sign-in stub.
 - **Post-lock amendments** — moderated scores stay editable in the store but the UI doesn't expose edit affordances after sign-off.
 - **Audit log** — no history of who-moderated-what-when.
 - **Mobile scoring** — desktop / tablet only.
@@ -166,7 +164,7 @@ The v1.1 priorities, in order:
 4. Reopen-for-amendment workflow with audit log
 5. Per-participant cohort comparison view inside Report Individual
 
-For each: write the change in a feature branch (`git checkout -b feat/<name>`), run `npm run verify` clean, commit, merge back to main only after testing the full FirstCry walkthrough still works.
+For each: write the change in a feature branch (`git checkout -b feat/<name>`), run `npm run verify` clean, commit, merge back to main only after testing a full engagement walkthrough still works.
 
 ## How MV likes to work
 
