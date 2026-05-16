@@ -47,8 +47,9 @@ export function EngagementsLanding() {
       {/* Header */}
       <div className="flex items-start justify-between gap-6">
         <div className="max-w-2xl">
-          <div className="text-2xs text-ocean-700 uppercase tracking-wider font-semibold mb-2">
+          <div className="text-2xs text-ocean-700 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
             Engagements
+            <Badge tone="neutral">v1.0</Badge>
           </div>
           <h1 className="display-serif text-[2.5rem] leading-[1.1] font-semibold text-navy-700 tracking-tight">
             All your assessment engagements.
