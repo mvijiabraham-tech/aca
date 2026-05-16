@@ -544,7 +544,7 @@ export const useAppStore = create<AppState>()(
         }));
       },
     }),
-    { name: "aca-v05-store", version: 8 },
+    { name: "aca-v05-store", version: 9 },
   ),
 );
 
