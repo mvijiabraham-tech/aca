@@ -219,6 +219,7 @@ const firstcry_assessors: Assessor[] = [
   { id: "a4", name: "Priya Sundaram",      email: "priya.s@firstcry.com",     role: "observer", organisation: "FirstCry", calibrated: true, assignedToolIds: ["t1","t5"] },
   { id: "a5", name: "Vikram Naidu",        email: "vikram.n@firstcry.com",    role: "observer", organisation: "FirstCry", calibrated: true, assignedToolIds: ["t2","t3"] },
   { id: "a6", name: "Sarah D'Souza",       email: "sarah.d@assessorpartner.in", role: "assessor", organisation: "AssessorPartner", calibrated: true, assignedToolIds: ["t1","t4"] },
+  { id: "a7", name: "Abraham",             email: "abraham@synovate.co.in",   role: "observer", organisation: "Synovate", calibrated: true, assignedToolIds: ["t1","t2","t3"] },
 ];
 
 const firstcry_participants: Participant[] = [

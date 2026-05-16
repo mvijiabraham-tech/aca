@@ -42,18 +42,25 @@ export function EngagementsLanding() {
 
   // Redirect observer-only users to /observe
   useEffect(() => {
-    if (appMode !== "prod" || !profile || !hydrated) return;
-    const engagements = allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id));
+    if (!profile) return;
+    const engagements = appMode === "prod"
+      ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id))
+      : allEngagements;
     if (engagements.length === 0) return;
     const userEmail = profile.email.toLowerCase();
-    const isObserverOnly = engagements.every((e) => {
+    // Check if this user only appears as "observer" role (never as lead/assessor)
+    const engagementsWithUser = engagements.filter((e) =>
+      e.assessors.some((a) => a.email.toLowerCase() === userEmail),
+    );
+    if (engagementsWithUser.length === 0) return;
+    const isObserverOnly = engagementsWithUser.every((e) => {
       const assessor = e.assessors.find((a) => a.email.toLowerCase() === userEmail);
       return assessor && assessor.role === "observer";
     });
     if (isObserverOnly) {
       navigate("/observe", { replace: true });
     }
-  }, [appMode, profile, hydrated, allEngagements, navigate]);
+  }, [appMode, profile, allEngagements, navigate]);
 
   const engagements = useMemo(
     () => appMode === "prod" ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)) : allEngagements,
