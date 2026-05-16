@@ -6,53 +6,43 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { CompetencyScoreCard, SaveBadge } from "@/components/scoring/ScoringWidgets";
-import { useEngagement, useActingObserverId, useAppStore, useAppMode } from "@/lib/store";
+import { useEngagement, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   findScore, observerToolParticipants,
-  expectedIndicators,
+  expectedIndicators, observerToolProgress,
 } from "@/lib/scoring";
 import { findToolType } from "@/mocks/toolLibrary";
 import { findCompetency } from "@/mocks/dictionary";
-import type {
-  CompetencyScore, IndicatorScore,
-} from "@/types";
+import type { CompetencyScore, IndicatorScore } from "@/types";
 
-export function ScoreParticipantSheet() {
+export function ObserverSheet() {
   const { engagementId, toolId, participantId } = useParams<{
     engagementId: string; toolId: string; participantId: string;
   }>();
   const navigate = useNavigate();
   const engagement = useEngagement(engagementId);
-  const observerId = useActingObserverId(engagementId);
   const updateCompetencyScore = useAppStore((s) => s.updateCompetencyScore);
   const markScoreComplete = useAppStore((s) => s.markScoreComplete);
-  const setActingObserver = useAppStore((s) => s.setActingObserver);
-  const appMode = useAppMode();
   const { profile } = useAuth();
 
-  // In prod mode, auto-resolve observer from auth profile email
-  useEffect(() => {
-    if (appMode !== "prod" || !isSupabaseConfigured || !engagement || !profile) return;
+  const observerId = (() => {
+    if (!engagement || !profile) return undefined;
     const match = engagement.assessors.find(
       (a) => a.email.toLowerCase() === profile.email.toLowerCase(),
     );
-    if (match && match.id !== observerId) {
-      setActingObserver(engagement.id, match.id);
-    }
-  }, [appMode, engagement, profile, observerId, setActingObserver]);
+    return match?.id;
+  })();
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // Local draft state — one entry per competency
+  // Local draft state
   const [drafts, setDrafts] = useState<Record<string, CompetencyScore>>({});
   const [initialized, setInitialized] = useState(false);
 
-  // Hydrate drafts from the existing score record once
+  // Hydrate drafts from existing score record once
   useEffect(() => {
     if (initialized || !engagement || !observerId || !toolId || !participantId) return;
     const score = findScore(engagement, participantId, toolId, observerId);
@@ -83,7 +73,7 @@ export function ScoreParticipantSheet() {
     return (
       <div>
         <button
-          onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}`)}
+          onClick={() => navigate(`/observe/${engagement.id}/${toolId}`)}
           className="text-sm text-ink-500 hover:text-navy-700"
         >
           <ChevronLeft size={14} className="inline mr-1" /> Back
@@ -97,11 +87,9 @@ export function ScoreParticipantSheet() {
   const score = findScore(engagement, participantId, toolId, observerId);
   const isComplete = !!score?.completedAt;
 
-  // Capture stable values for closures
   const stableEngagementId = engagement.id;
   const stableObserverId = observerId;
 
-  // Persist a competency score with debounce
   function persistCompetency(cid: string, next: CompetencyScore) {
     setDrafts((d) => ({ ...d, [cid]: next }));
     if (debounceTimers.current[cid]) clearTimeout(debounceTimers.current[cid]);
@@ -128,9 +116,19 @@ export function ScoreParticipantSheet() {
 
   function toggleComplete() {
     markScoreComplete(stableEngagementId, participantId!, toolId!, stableObserverId, !isComplete);
+
+    // Check if this was the last participant — if so, trigger email
+    if (!isComplete) {
+      const progress = observerToolProgress(engagement!, stableObserverId, toolId!);
+      // After marking this one complete, all would be done
+      const allOthersComplete = progress.complete === progress.total - 1;
+      if (allOthersComplete && profile?.email) {
+        triggerEmailOnCompletion(stableEngagementId, toolId!, stableObserverId, profile.email);
+      }
+    }
   }
 
-  // Indicator progress for this participant on this tool
+  // Indicator progress
   const liveProgress = useMemo(() => {
     const totalIndicators = expectedIndicators(tool);
     let rated = 0;
@@ -152,61 +150,44 @@ export function ScoreParticipantSheet() {
     <div className="space-y-6">
       {/* Breadcrumb */}
       <button
-        onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}`)}
+        onClick={() => navigate(`/observe/${engagement.id}/${toolId}`)}
         className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-navy-700 transition-colors"
       >
         <ChevronLeft size={14} /> Back to {tool.name}
       </button>
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-6">
-        <div className="max-w-2xl">
-          <div className="text-2xs font-medium text-ink-500 uppercase tracking-wider mb-1">
-            {toolType?.name ?? tool.toolTypeKey} · {tool.name}
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="display-serif text-[2rem] leading-[1.1] font-semibold text-navy-700 tracking-tight">
-              {participant.name}
-            </h1>
-            {participant.employeeId && (
-              <span className="text-sm font-mono text-ink-500">{participant.employeeId}</span>
-            )}
-          </div>
-          <div className="text-sm text-ink-500 mt-1">
-            {participant.currentRole}
-            {participant.businessUnit && ` \u00b7 ${participant.businessUnit}`}
-            {participant.location && ` \u00b7 ${participant.location}`}
-          </div>
+      <div>
+        <div className="text-2xs font-medium text-ink-500 uppercase tracking-wider mb-1">
+          {toolType?.name ?? tool.toolTypeKey} · {tool.name}
         </div>
-
         <div className="flex items-center gap-3">
-          <SaveBadge lastSaved={lastSaved} />
-          <Button
-            variant={isComplete ? "secondary" : "primary"}
-            onClick={toggleComplete}
-            disabled={liveProgress.rated === 0 && !isComplete}
-          >
-            {isComplete ? (
-              <><RotateCcw size={13} /> Reopen scoring</>
-            ) : (
-              <><CheckCircle2 size={13} /> Mark complete</>
-            )}
-          </Button>
+          <h1 className="display-serif text-[1.75rem] leading-[1.1] font-semibold text-navy-700 tracking-tight">
+            {participant.name}
+          </h1>
+          {participant.employeeId && (
+            <span className="text-sm font-mono text-ink-500">{participant.employeeId}</span>
+          )}
+        </div>
+        <div className="text-sm text-ink-500 mt-1">
+          {participant.currentRole}
+          {participant.businessUnit && ` \u00b7 ${participant.businessUnit}`}
+          {participant.location && ` \u00b7 ${participant.location}`}
         </div>
       </div>
 
-      {/* Progress band */}
-      <div className="bg-white rounded-lg border border-ink-200 p-4 flex items-center gap-4">
+      {/* Sticky progress bar + mark complete */}
+      <div className="sticky top-14 z-20 bg-white rounded-lg border border-ink-200 p-4 flex items-center gap-4 shadow-sm">
         <div className="flex-1">
           <div className="flex items-baseline justify-between mb-1.5">
             <span className="text-2xs uppercase tracking-wider font-semibold text-ink-500">
-              Progress on this participant
+              Progress
             </span>
             <span className="text-sm font-semibold text-navy-700">
-              {liveProgress.rated} of {liveProgress.total} indicators
+              {liveProgress.rated} / {liveProgress.total} indicators
             </span>
           </div>
-          <div className="h-1.5 bg-ink-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-ink-100 rounded-full overflow-hidden">
             <div
               className={cn(
                 "h-full rounded-full transition-all",
@@ -216,11 +197,18 @@ export function ScoreParticipantSheet() {
             />
           </div>
         </div>
-        {isComplete && (
-          <Badge tone="green">
-            <CheckCircle2 size={11} /> Scoring complete
-          </Badge>
-        )}
+        <SaveBadge lastSaved={lastSaved} />
+        <Button
+          variant={isComplete ? "secondary" : "primary"}
+          onClick={toggleComplete}
+          disabled={liveProgress.rated === 0 && !isComplete}
+        >
+          {isComplete ? (
+            <><RotateCcw size={13} /> Reopen</>
+          ) : (
+            <><CheckCircle2 size={13} /> Mark complete</>
+          )}
+        </Button>
       </div>
 
       {/* Competency cards */}
@@ -243,6 +231,7 @@ export function ScoreParticipantSheet() {
               indicators={targetLevel.indicators}
               draft={draft}
               isComplete={isComplete}
+              size="touch"
               onIndicator={(idx, change) => setIndicator(cid, idx, change)}
               onNotes={(field, value) => setNotes(cid, field, value)}
             />
@@ -256,7 +245,7 @@ export function ScoreParticipantSheet() {
           {prevParticipant && (
             <Button
               variant="secondary"
-              onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}/${prevParticipant.id}`)}
+              onClick={() => navigate(`/observe/${engagement.id}/${toolId}/${prevParticipant.id}`)}
             >
               <ChevronLeft size={13} /> {prevParticipant.name}
             </Button>
@@ -269,14 +258,14 @@ export function ScoreParticipantSheet() {
           {nextParticipant ? (
             <Button
               variant="primary"
-              onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}/${nextParticipant.id}`)}
+              onClick={() => navigate(`/observe/${engagement.id}/${toolId}/${nextParticipant.id}`)}
             >
               {nextParticipant.name} <ChevronRight size={13} />
             </Button>
           ) : (
             <Button
               variant="primary"
-              onClick={() => navigate(`/engagement/${engagement.id}/score/${toolId}`)}
+              onClick={() => navigate(`/observe/${engagement.id}/${toolId}`)}
             >
               Back to all participants <ArrowRight size={13} />
             </Button>
@@ -285,4 +274,22 @@ export function ScoreParticipantSheet() {
       </div>
     </div>
   );
+}
+
+/** Fire-and-forget email trigger when all participants for a tool are complete */
+async function triggerEmailOnCompletion(
+  engagementId: string,
+  toolId: string,
+  observerId: string,
+  observerEmail: string,
+) {
+  try {
+    await fetch("/.netlify/functions/email-scores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ engagementId, toolId, observerId, observerEmail }),
+    });
+  } catch {
+    // Silent failure — email is best-effort
+  }
 }

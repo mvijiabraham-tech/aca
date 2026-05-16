@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AddEngagementModal } from "@/components/AddEngagementModal";
 import { useAppStore, useAppMode, DEMO_ENGAGEMENT_IDS } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { hydrateFromSupabase } from "@/lib/sync";
 import type { Engagement, EngagementStatus } from "@/types";
@@ -22,6 +23,7 @@ export function EngagementsLanding() {
   const hydrated = useAppStore((s) => s._hydrated);
   const hydrateStore = useAppStore((s) => s.hydrateFromSupabase);
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -37,6 +39,21 @@ export function EngagementsLanding() {
       setLoading(false);
     });
   }, [appMode, hydrated, hydrateStore]);
+
+  // Redirect observer-only users to /observe
+  useEffect(() => {
+    if (appMode !== "prod" || !profile || !hydrated) return;
+    const engagements = allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id));
+    if (engagements.length === 0) return;
+    const userEmail = profile.email.toLowerCase();
+    const isObserverOnly = engagements.every((e) => {
+      const assessor = e.assessors.find((a) => a.email.toLowerCase() === userEmail);
+      return assessor && assessor.role === "observer";
+    });
+    if (isObserverOnly) {
+      navigate("/observe", { replace: true });
+    }
+  }, [appMode, profile, hydrated, allEngagements, navigate]);
 
   const engagements = useMemo(
     () => appMode === "prod" ? allEngagements.filter((e) => !DEMO_ENGAGEMENT_IDS.has(e.id)) : allEngagements,

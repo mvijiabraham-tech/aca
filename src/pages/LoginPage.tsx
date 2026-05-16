@@ -5,6 +5,12 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 
+const ALLOWED_EMAILS = new Set([
+  "mvijiabraham@gmail.com",
+  "alex@synovate.co.in",
+  "cyril@synovate.co.in",
+]);
+
 export function LoginPage() {
   const { user, loading, signIn } = useAuth();
   const [email, setEmail] = useState("");
@@ -20,8 +26,15 @@ export function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const trimmed = email.trim().toLowerCase();
+    if (!ALLOWED_EMAILS.has(trimmed)) {
+      setError("This email is not authorised to access ACA. Contact your Lead Assessor.");
+      return;
+    }
+
     setSubmitting(true);
-    const result = await signIn(email.trim());
+    const result = await signIn(trimmed);
     setSubmitting(false);
     if (result.error) {
       setError(result.error);
@@ -56,7 +69,7 @@ export function LoginPage() {
                   Check your email
                 </h2>
                 <p className="text-sm text-ink-500 mt-3 leading-relaxed">
-                  We sent a magic link to <strong className="text-navy-700">{email}</strong>.
+                  We sent an access link to <strong className="text-navy-700">{email}</strong>.
                   Click the link in that email to sign in.
                 </p>
                 <button
@@ -74,7 +87,7 @@ export function LoginPage() {
                   Sign in
                 </h2>
                 <p className="text-sm text-ink-500 text-center mb-6">
-                  Enter your email to receive a magic link.
+                  Enter your email to receive an access link.
                 </p>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -110,7 +123,7 @@ export function LoginPage() {
                     disabled={submitting || !email.trim()}
                   >
                     {submitting ? "Sending…" : (
-                      <>Send magic link <ArrowRight size={14} /></>
+                      <>Send ACA access link <ArrowRight size={14} /></>
                     )}
                   </Button>
                 </form>

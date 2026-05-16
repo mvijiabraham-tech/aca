@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth";
 import { AuthGuard } from "@/components/AuthGuard";
 import { LandingShell } from "@/components/layout/LandingShell";
 import { EngagementShell } from "@/components/layout/EngagementShell";
+import { ObserverShell } from "@/components/layout/ObserverShell";
 import { EngagementsLanding } from "@/pages/EngagementsLanding";
 import { LoginPage } from "@/pages/LoginPage";
 import { SetupDashboard } from "@/pages/SetupDashboard";
@@ -29,6 +30,10 @@ import { ReportLanding } from "@/pages/ReportLanding";
 import { ReportIndividual } from "@/pages/ReportIndividual";
 import { ReportGroup } from "@/pages/ReportGroup";
 import { ReportFeedback } from "@/pages/ReportFeedback";
+import { ObserverHome } from "@/pages/observer/ObserverHome";
+import { ObserverToolList } from "@/pages/observer/ObserverToolList";
+import { ObserverCockpit } from "@/pages/observer/ObserverCockpit";
+import { ObserverSheet } from "@/pages/observer/ObserverSheet";
 
 function StepRouter() {
   const { stepKey } = useParams<{ stepKey: string }>();
@@ -77,6 +82,14 @@ export function App() {
               <Route path="report/individual" element={<ReportIndividual />} />
               <Route path="report/group" element={<ReportGroup />} />
               <Route path="report/feedback" element={<ReportFeedback />} />
+            </Route>
+
+            {/* Observer routes */}
+            <Route path="/observe" element={<ObserverHome />} />
+            <Route path="/observe/:engagementId" element={<ObserverShell />}>
+              <Route index element={<ObserverToolList />} />
+              <Route path=":toolId" element={<ObserverCockpit />} />
+              <Route path=":toolId/:participantId" element={<ObserverSheet />} />
             </Route>
           </Route>
 
