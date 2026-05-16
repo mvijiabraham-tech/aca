@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Mail, ArrowRight, CheckCircle2 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, BYPASS_AUTH } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 
@@ -11,6 +11,7 @@ const ALLOWED_EMAILS = new Set([
   "cyril@synovate.co.in",
   "abraham@synovate.co.in",
 ]);
+
 
 export function LoginPage() {
   const { user, loading, signIn } = useAuth();
@@ -39,6 +40,9 @@ export function LoginPage() {
     setSubmitting(false);
     if (result.error) {
       setError(result.error);
+    } else if (BYPASS_AUTH) {
+      // Bypass mode: signIn already set the user, redirect will happen via the check above
+      window.location.href = "/";
     } else {
       setSent(true);
     }

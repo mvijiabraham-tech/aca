@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
+// Temporary: bypass Supabase email auth for testing. Set to false for production.
+export const BYPASS_AUTH = true;
+
+const BYPASS_STORAGE_KEY = "aca-bypass-auth-email";
+
 export interface Profile {
   id: string;
   email: string;
@@ -45,6 +50,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Bypass mode: check localStorage for a stored email
+    if (BYPASS_AUTH) {
+      const storedEmail = localStorage.getItem(BYPASS_STORAGE_KEY);
+      if (storedEmail) {
+        const fakeUser = { id: `bypass-${storedEmail}`, email: storedEmail } as User;
+        setUser(fakeUser);
+        setProfile({
+          id: `bypass-${storedEmail}`,
+          email: storedEmail,
+          full_name: storedEmail.split("@")[0].replace(/[._]/g, " "),
+          organisation: storedEmail.split("@")[1]?.split(".")[0] ?? null,
+        });
+      }
+      setLoading(false);
+      return;
+    }
+
     if (!supabase) {
       setLoading(false);
       return;
@@ -78,6 +100,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = useCallback(async (email: string): Promise<{ error: string | null }> => {
+    // Bypass mode: store email and fake sign-in
+    if (BYPASS_AUTH) {
+      localStorage.setItem(BYPASS_STORAGE_KEY, email);
+      const fakeUser = { id: `bypass-${email}`, email } as User;
+      setUser(fakeUser);
+      setProfile({
+        id: `bypass-${email}`,
+        email,
+        full_name: email.split("@")[0].replace(/[._]/g, " "),
+        organisation: email.split("@")[1]?.split(".")[0] ?? null,
+      });
+      return { error: null };
+    }
+
     if (!supabase) return { error: "Supabase is not configured" };
     const redirectTo = window.location.origin;
     const { error } = await supabase.auth.signInWithOtp({
@@ -88,6 +124,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (BYPASS_AUTH) {
+      localStorage.removeItem(BYPASS_STORAGE_KEY);
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      return;
+    }
     if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
