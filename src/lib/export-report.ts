@@ -355,30 +355,32 @@ function addHeadersAndFooters(
   }
 }
 
-// ─── Public export ──────────────────────────────────────────────────────────
+// ─── Public exports ─────────────────────────────────────────────────────────
 
-export function generateIndividualReportPDF(
+/** Build the PDF document in memory (no save/download). */
+export function buildIndividualReportDoc(
   engagement: Engagement,
   participant: Participant,
-) {
+): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const oar = computedOar(engagement, participant.id);
   const bandKey = oar !== null ? oarBandFor(engagement, oar) : null;
 
-  // Page 1: Cover
   renderCoverPage(doc, engagement, participant, oar, bandKey);
-
-  // Page 2: Score table
   renderScoreTable(doc, engagement, participant, oar, bandKey);
-
-  // Pages 3+: Narrative sections
   renderNarrativeSections(doc, engagement, participant);
-
-  // Post-render: headers + footers on all pages except cover
   addHeadersAndFooters(doc, engagement);
 
-  // Download
+  return doc;
+}
+
+/** Build and trigger browser download of the individual report PDF. */
+export function generateIndividualReportPDF(
+  engagement: Engagement,
+  participant: Participant,
+) {
+  const doc = buildIndividualReportDoc(engagement, participant);
   const fileName = `${engagement.basics.code} - ${participant.name} - Individual Report.pdf`;
   doc.save(fileName);
 }
