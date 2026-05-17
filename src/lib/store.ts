@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
   Engagement, NewEngagementInput, SetupStep, EngagementBasics,
-  CompetencySelection, ProficiencyTarget, EngagementTool, AggregationRules,
+  Competency, CompetencySelection, ProficiencyTarget, EngagementTool, AggregationRules,
   StepKey, StepStatus, Assessor, Participant, ScheduleSlot, ReportFormat,
   ParticipantToolScore, CompetencyScore,
   ModeratedScore, ParticipantOar, CalibrateStage,
@@ -26,6 +26,7 @@ interface AppState {
   resetAll: () => void;
   updateBasics: (id: string, basics: Partial<EngagementBasics>) => void;
   setCompetencies: (id: string, comps: CompetencySelection[]) => void;
+  setCustomCompetencies: (id: string, comps: Competency[]) => void;
   setProficiencyTargets: (id: string, targets: ProficiencyTarget[]) => void;
   setTools: (id: string, tools: EngagementTool[]) => void;
   setAggregation: (id: string, rules: AggregationRules) => void;
@@ -136,6 +137,7 @@ export const useAppStore = create<AppState>()(
           createdAt: new Date().toISOString(),
           basics: blankBasics(input),
           competencies: [],
+          customCompetencies: [],
           proficiencyTargets: [],
           tools: [],
           aggregation: DEFAULT_AGGREGATION,
@@ -177,6 +179,18 @@ export const useAppStore = create<AppState>()(
             const targets = e.proficiencyTargets.filter((t) => compIds.has(t.competencyId));
             return { ...e, competencies: comps, proficiencyTargets: targets };
           }),
+        }));
+        if (shouldSync()) {
+          const eng = getEngagement(get().engagements, id);
+          if (eng) debouncedPushEngagementMeta(eng);
+        }
+      },
+
+      setCustomCompetencies: (id, comps) => {
+        set((s) => ({
+          engagements: patchEngagement(s.engagements, id, (e) => ({
+            ...e, customCompetencies: comps,
+          })),
         }));
         if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
@@ -524,7 +538,21 @@ export const useAppStore = create<AppState>()(
         }));
       },
     }),
-    { name: "aca-v05-store", version: 10 },
+    {
+      name: "aca-v05-store",
+      version: 11,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 11) {
+          const engagements = (state.engagements ?? []) as Record<string, unknown>[];
+          state.engagements = engagements.map((e) => ({
+            ...e,
+            customCompetencies: (e as Record<string, unknown>).customCompetencies ?? [],
+          }));
+        }
+        return state as unknown as AppState;
+      },
+    },
   ),
 );
 

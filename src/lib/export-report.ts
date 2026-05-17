@@ -193,7 +193,7 @@ function renderScoreTable(
   const tableBody: (string | { content: string; styles: Record<string, unknown> })[][] = [];
 
   engagement.competencies.forEach((sel) => {
-    const comp = findCompetency(sel.competencyId);
+    const comp = findCompetency(sel.competencyId, engagement.customCompetencies);
     if (!comp) return;
     const target = engagement.proficiencyTargets.find((t) => t.competencyId === sel.competencyId);
     const score = effectiveCompetencyScore(engagement, participant.id, sel.competencyId);

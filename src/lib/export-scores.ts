@@ -29,7 +29,7 @@ export function generateScoreExcel(
     const status = computeScoringStatus(score);
 
     tool.competencyIds.forEach((cid) => {
-      const competency = findCompetency(cid);
+      const competency = findCompetency(cid, engagement.customCompetencies);
       if (!competency) return;
       const target = engagement.proficiencyTargets.find((t) => t.competencyId === cid);
       const cs = score?.competencies.find((c) => c.competencyId === cid);
@@ -109,7 +109,7 @@ export function generateScorePDF(
     const tableData: (string | number)[][] = [];
 
     tool.competencyIds.forEach((cid) => {
-      const competency = findCompetency(cid);
+      const competency = findCompetency(cid, engagement.customCompetencies);
       if (!competency) return;
       const target = engagement.proficiencyTargets.find((t) => t.competencyId === cid);
       const cs = score?.competencies.find((c) => c.competencyId === cid);

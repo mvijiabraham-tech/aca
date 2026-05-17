@@ -11,9 +11,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Field, TextInput } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
-import { dictionary, clusters, clusterMeta } from "@/mocks/dictionary";
+import { dictionary, clusters, clusterMeta, findCompetency } from "@/mocks/dictionary";
 import { parseCSV, parseCompetenciesCSV, downloadCSVTemplate } from "@/lib/csv-import";
-import type { CompetencySelection } from "@/types";
+import type { CompetencySelection, Competency } from "@/types";
 
 const MIN_SELECTED = 4;
 
@@ -22,6 +22,7 @@ export function StepCompetencies() {
   const navigate = useNavigate();
   const engagement = useEngagement(engagementId);
   const setCompetencies = useAppStore((s) => s.setCompetencies);
+  const setCustomCompetencies = useAppStore((s) => s.setCustomCompetencies);
   const setStepStatus = useAppStore((s) => s.setStepStatus);
 
   const [search, setSearch] = useState("");
@@ -29,6 +30,8 @@ export function StepCompetencies() {
   const [showCsvHint, setShowCsvHint] = useState(false);
   const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const customCompetencies = engagement?.customCompetencies ?? [];
 
   // Current selections from store
   const selectedMap = useMemo(() => {
@@ -42,15 +45,21 @@ export function StepCompetencies() {
   // Update step status whenever selections change
   useEffect(() => {
     if (!engagement) return;
+    const customCount = customCompetencies.length;
+    const dictCount = selectedCount - customCount;
     if (selectedCount === 0) {
       setStepStatus(engagement.id, "competencies", "not_started", undefined);
     } else if (selectedCount < MIN_SELECTED) {
       setStepStatus(engagement.id, "competencies", "in_progress", `${selectedCount} of ${MIN_SELECTED} minimum selected`);
     } else {
-      setStepStatus(engagement.id, "competencies", "complete", `${selectedCount} competencies · Synovate dictionary`);
+      const parts: string[] = [`${selectedCount} competencies`];
+      if (dictCount > 0 && customCount > 0) parts.push(`${dictCount} dictionary + ${customCount} custom`);
+      else if (customCount > 0) parts.push("custom framework");
+      else parts.push("Synovate dictionary");
+      setStepStatus(engagement.id, "competencies", "complete", parts.join(" · "));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCount]);
+  }, [selectedCount, customCompetencies.length]);
 
   if (!engagement || !engagementId) return null;
 
@@ -60,6 +69,11 @@ export function StepCompetencies() {
     let next: CompetencySelection[];
     if (exists) {
       next = engagement.competencies.filter((c) => c.competencyId !== competencyId);
+      // If removing a custom competency, also clean it from customCompetencies
+      const isCustom = customCompetencies.some((c) => c.id === competencyId);
+      if (isCustom) {
+        setCustomCompetencies(engagement.id, customCompetencies.filter((c) => c.id !== competencyId));
+      }
     } else {
       next = [...engagement.competencies, { competencyId, weight: 1.0, critical: false }];
     }
@@ -85,21 +99,40 @@ export function StepCompetencies() {
         setCsvMessage({ type: "error", text: "CSV is empty or has no data rows." });
         return;
       }
-      const { data, errors } = parseCompetenciesCSV(rows);
+      const { competencies: newCustom, selections, errors } = parseCompetenciesCSV(rows);
       if (errors.length > 0) {
         setCsvMessage({ type: "error", text: errors.join(" · ") });
       }
-      if (data.length > 0) {
-        // Replace: CSV defines the full competency selection
-        setCompetencies(engagement.id, data);
-        setCsvMessage({ type: "success", text: `${data.length} competenc${data.length === 1 ? "y" : "ies"} imported.${errors.length > 0 ? ` ${errors.length} row(s) skipped.` : ""}` });
+      if (selections.length > 0) {
+        if (newCustom.length > 0) {
+          // Custom format: merge custom definitions, append selections
+          const merged = [...customCompetencies];
+          for (const c of newCustom) {
+            const existing = merged.findIndex((x) => x.id === c.id);
+            if (existing !== -1) merged[existing] = c;
+            else merged.push(c);
+          }
+          setCustomCompetencies(engagement.id, merged);
+          // Append new selections to existing (dedupe by competencyId)
+          const existingIds = new Set(engagement.competencies.map((c) => c.competencyId));
+          const toAdd = selections.filter((s) => !existingIds.has(s.competencyId));
+          setCompetencies(engagement.id, [...engagement.competencies, ...toAdd]);
+        } else {
+          // Legacy format: replace selections entirely
+          setCompetencies(engagement.id, selections);
+        }
+        const customLabel = newCustom.length > 0 ? " (custom definitions)" : " (dictionary selections)";
+        setCsvMessage({
+          type: "success",
+          text: `${selections.length} competenc${selections.length === 1 ? "y" : "ies"} imported${customLabel}.${errors.length > 0 ? ` ${errors.length} row(s) skipped.` : ""}`,
+        });
       }
     };
     reader.readAsText(file);
     e.target.value = "";
   }
 
-  // Filtered + grouped
+  // Filtered + grouped — dictionary competencies by Synovate cluster
   const filteredByCluster = useMemo(() => {
     const map: Record<string, typeof dictionary> = {};
     clusters.forEach((c) => { map[c.key] = []; });
@@ -113,6 +146,26 @@ export function StepCompetencies() {
     });
     return map;
   }, [search]);
+
+  // Custom competencies grouped by cluster
+  const customByCluster = useMemo(() => {
+    const map: Record<string, Competency[]> = {};
+    customCompetencies.forEach((c) => {
+      if (search) {
+        const q = search.toLowerCase();
+        if (!c.name.toLowerCase().includes(q) && !c.definition.toLowerCase().includes(q)) return;
+      }
+      if (!map[c.cluster]) map[c.cluster] = [];
+      map[c.cluster].push(c);
+    });
+    return map;
+  }, [customCompetencies, search]);
+
+  // Custom cluster names that aren't Synovate clusters
+  const customClusterNames = useMemo(() => {
+    const synovateClusters = new Set<string>(clusters.map((c) => c.key));
+    return Object.keys(customByCluster).filter((k) => !synovateClusters.has(k));
+  }, [customByCluster]);
 
   return (
     <div className="space-y-6">
@@ -133,9 +186,14 @@ export function StepCompetencies() {
         <div className="bg-ocean-50/50 border border-ocean-300/50 rounded-lg p-4 flex items-start gap-3">
           <Info size={16} className="text-ocean-700 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-xs text-ink-700 leading-relaxed">
-            <div className="font-semibold text-navy-700 mb-1">Upload competency selections via CSV</div>
-            CSV with columns: competency_id, weight, critical. The competency_id must match an entry in the Synovate dictionary.
-            Uploading replaces the current selection.
+            <div className="font-semibold text-navy-700 mb-1">Upload competencies via CSV</div>
+            <strong>Custom framework:</strong> CSV with columns id, name, definition, cluster, and 12 indicator columns
+            (l1_indicator_1 ... l3_indicator_4). Optional: weight, critical. Download the template for the full column list.
+            <br />
+            <strong>Dictionary selection:</strong> CSV with columns competency_id, weight, critical (selects from Synovate dictionary).
+            <div className="mt-1 text-2xs text-ink-500">
+              Custom competencies are appended to existing selections. Dictionary CSV replaces the current selection.
+            </div>
             <div className="mt-2 flex items-center gap-2">
               <input
                 ref={fileInputRef}
@@ -208,15 +266,18 @@ export function StepCompetencies() {
           </div>
           <div className="divide-y divide-ink-100">
             {Array.from(selectedMap.values()).map((sel) => {
-              const c = dictionary.find((x) => x.id === sel.competencyId);
+              const c = findCompetency(sel.competencyId, customCompetencies);
               if (!c) return null;
+              const isCustom = customCompetencies.some((x) => x.id === c.id);
+              const clusterLabel = clusterMeta(c.cluster)?.label ?? c.cluster;
               return (
                 <div key={sel.competencyId} className="p-4 hover:bg-ink-100/30 transition-colors">
                   <div className="flex items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-sm font-semibold text-navy-700">{c.name}</h4>
-                        <Badge tone="neutral">{clusterMeta(c.cluster)?.label}</Badge>
+                        <Badge tone="neutral">{clusterLabel}</Badge>
+                        {isCustom && <Badge tone="navy">Custom</Badge>}
                         {sel.critical && (
                           <Badge tone="amber">
                             <Star size={9} /> Critical
@@ -279,82 +340,49 @@ export function StepCompetencies() {
           const competencies = filteredByCluster[cluster.key] ?? [];
           if (competencies.length === 0) return null;
           return (
-            <Card key={cluster.key}>
-              <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30 flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-navy-700">{cluster.label}</h4>
-                  <p className="text-2xs text-ink-500 mt-0.5">{cluster.description}</p>
-                </div>
-                <Badge tone="neutral">{competencies.length}</Badge>
-              </div>
-              <div className="divide-y divide-ink-100">
-                {competencies.map((c) => {
-                  const isSelected = selectedMap.has(c.id);
-                  const isExpanded = expandedId === c.id;
-                  return (
-                    <div key={c.id}>
-                      <div className="p-4 flex items-start gap-4 hover:bg-ink-100/30 transition-colors">
-                        <button
-                          onClick={() => toggleSelection(c.id)}
-                          className={cn(
-                            "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
-                            isSelected
-                              ? "bg-ocean-600 border-ocean-600"
-                              : "bg-white border-ink-300 hover:border-ocean-400",
-                          )}
-                        >
-                          {isSelected && <CheckCircle2 size={14} className="text-white" />}
-                        </button>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h5 className="text-sm font-semibold text-navy-700">{c.name}</h5>
-                            {c.sectorTags.filter((t) => t !== "generic").map((t) => (
-                              <Badge key={t} tone="navy">{t}</Badge>
-                            ))}
-                          </div>
-                          <p className="text-xs text-ink-500 mt-1 leading-relaxed">{c.definition}</p>
-
-                          {/* Inline expansion: shows all 12 indicators */}
-                          {isExpanded && (
-                            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                              {c.levels.map((lvl) => (
-                                <div key={lvl.level} className="bg-ink-100/40 rounded-md p-3 border border-ink-200">
-                                  <div className="flex items-baseline gap-1.5 mb-2">
-                                    <span className="text-2xs font-mono font-bold text-ocean-700">L{lvl.level}</span>
-                                    <span className="text-2xs font-semibold text-navy-700">{lvl.name}</span>
-                                    <span className="text-2xs text-ink-500">· {lvl.qualifier}</span>
-                                  </div>
-                                  <ul className="space-y-1.5">
-                                    {lvl.indicators.map((ind, i) => (
-                                      <li key={i} className="text-2xs text-ink-700 leading-snug flex gap-1.5">
-                                        <span className="text-ink-400">•</span>
-                                        <span>{ind}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => setExpandedId(isExpanded ? null : c.id)}
-                          className="text-ink-400 hover:text-navy-700 transition-colors p-1 flex-shrink-0"
-                          title={isExpanded ? "Hide indicators" : "Show indicators"}
-                        >
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
+            <CompetencyClusterCard
+              key={cluster.key}
+              label={cluster.label}
+              description={cluster.description}
+              competencies={competencies}
+              selectedMap={selectedMap}
+              expandedId={expandedId}
+              onToggle={toggleSelection}
+              onExpand={setExpandedId}
+            />
           );
         })}
       </div>
+
+      {/* Custom clusters from uploaded competencies */}
+      {customClusterNames.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-baseline justify-between">
+            <h3 className="display-serif text-lg font-semibold text-navy-700">Custom framework</h3>
+            <span className="text-2xs text-ink-500 font-medium uppercase tracking-wider">
+              {customCompetencies.length} competencies · {customClusterNames.length} cluster{customClusterNames.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {customClusterNames.map((clusterName) => {
+            const competencies = customByCluster[clusterName] ?? [];
+            if (competencies.length === 0) return null;
+            return (
+              <CompetencyClusterCard
+                key={clusterName}
+                label={clusterName}
+                description="Custom cluster from uploaded CSV"
+                competencies={competencies}
+                selectedMap={selectedMap}
+                expandedId={expandedId}
+                onToggle={toggleSelection}
+                onExpand={setExpandedId}
+                isCustom
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* Helpful warning if too few selected */}
       {selectedCount > 0 && selectedCount < MIN_SELECTED && (
@@ -380,5 +408,106 @@ export function StepCompetencies() {
         </Button>
       </div>
     </div>
+  );
+}
+
+// ─── Reusable cluster card ──────────────────────────────────────────────────
+
+function CompetencyClusterCard({
+  label,
+  description,
+  competencies,
+  selectedMap,
+  expandedId,
+  onToggle,
+  onExpand,
+  isCustom,
+}: {
+  label: string;
+  description: string;
+  competencies: Competency[];
+  selectedMap: Map<string, CompetencySelection>;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  onExpand: (id: string | null) => void;
+  isCustom?: boolean;
+}) {
+  return (
+    <Card>
+      <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-navy-700">{label}</h4>
+            {isCustom && <Badge tone="navy">Custom</Badge>}
+          </div>
+          <p className="text-2xs text-ink-500 mt-0.5">{description}</p>
+        </div>
+        <Badge tone="neutral">{competencies.length}</Badge>
+      </div>
+      <div className="divide-y divide-ink-100">
+        {competencies.map((c) => {
+          const isSelected = selectedMap.has(c.id);
+          const isExpanded = expandedId === c.id;
+          return (
+            <div key={c.id}>
+              <div className="p-4 flex items-start gap-4 hover:bg-ink-100/30 transition-colors">
+                <button
+                  onClick={() => onToggle(c.id)}
+                  className={cn(
+                    "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
+                    isSelected
+                      ? "bg-ocean-600 border-ocean-600"
+                      : "bg-white border-ink-300 hover:border-ocean-400",
+                  )}
+                >
+                  {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h5 className="text-sm font-semibold text-navy-700">{c.name}</h5>
+                    {c.sectorTags.filter((t) => t !== "generic").map((t) => (
+                      <Badge key={t} tone="navy">{t}</Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-ink-500 mt-1 leading-relaxed">{c.definition}</p>
+
+                  {/* Inline expansion: shows all 12 indicators */}
+                  {isExpanded && (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {c.levels.map((lvl) => (
+                        <div key={lvl.level} className="bg-ink-100/40 rounded-md p-3 border border-ink-200">
+                          <div className="flex items-baseline gap-1.5 mb-2">
+                            <span className="text-2xs font-mono font-bold text-ocean-700">L{lvl.level}</span>
+                            <span className="text-2xs font-semibold text-navy-700">{lvl.name}</span>
+                            <span className="text-2xs text-ink-500">· {lvl.qualifier}</span>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {lvl.indicators.map((ind, i) => (
+                              <li key={i} className="text-2xs text-ink-700 leading-snug flex gap-1.5">
+                                <span className="text-ink-400">•</span>
+                                <span>{ind}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => onExpand(isExpanded ? null : c.id)}
+                  className="text-ink-400 hover:text-navy-700 transition-colors p-1 flex-shrink-0"
+                  title={isExpanded ? "Hide indicators" : "Show indicators"}
+                >
+                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

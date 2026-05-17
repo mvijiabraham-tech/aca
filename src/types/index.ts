@@ -33,7 +33,7 @@ export interface Competency {
   id: string;
   name: string;
   definition: string;
-  cluster: ClusterKey;
+  cluster: string;
   retailSpecific: boolean;
   sectorTags: string[];
   levels: CompetencyLevel[];
@@ -389,6 +389,7 @@ export interface Engagement {
   basics: EngagementBasics;
   setupSteps: SetupStep[];
   competencies: CompetencySelection[];
+  customCompetencies: Competency[];
   proficiencyTargets: ProficiencyTarget[];
   tools: EngagementTool[];
   aggregation: AggregationRules;

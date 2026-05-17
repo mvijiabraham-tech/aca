@@ -42,7 +42,7 @@ export function CalibrateReconcile() {
       (m) => m.participantId === selected.participantId && m.competencyId === selected.competencyId,
     );
     const participant = participants.find((p) => p.id === selected.participantId);
-    const competency = findCompetency(selected.competencyId);
+    const competency = findCompetency(selected.competencyId, engagement?.customCompetencies);
     return { obs, computed, spread, existing, participant, competency };
   })();
 
@@ -154,7 +154,7 @@ export function CalibrateReconcile() {
                   Participant
                 </th>
                 {competencies.map((sel) => {
-                  const c = findCompetency(sel.competencyId);
+                  const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
                   return (
                     <th key={sel.competencyId} className="px-2 py-3 font-semibold text-2xs text-ink-500 min-w-[90px]" title={c?.name}>
                       <div className="leading-tight truncate max-w-[120px]">{shortName(c?.name)}</div>

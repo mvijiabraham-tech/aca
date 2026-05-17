@@ -1,18 +1,59 @@
 import { dictionary } from "@/mocks/dictionary";
-import type { CompetencySelection, Assessor, Participant, AssessorRole } from "@/types";
+import type { Competency, CompetencySelection, Assessor, Participant, AssessorRole, CompetencyLevel, ProficiencyLevel } from "@/types";
 
-// ─── Generic CSV parser ─────────────────────────────────────────────────────
+// ─── Generic CSV parser (RFC 4180 quoted-field support) ─────────────────────
+
+/** Split a single CSV line into fields, respecting double-quoted values. */
+function splitCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        // Escaped quote ("") or end of quoted field
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        current += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+        i++;
+      } else if (ch === ",") {
+        fields.push(current.trim());
+        current = "";
+        i++;
+      } else {
+        current += ch;
+        i++;
+      }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
 
 /** Parse CSV text into array of row objects keyed by header. */
 export function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+  const headers = splitCSVLine(lines[0]).map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
   const rows: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map((v) => v.trim());
+    const values = splitCSVLine(lines[i]);
     const row: Record<string, string> = {};
     headers.forEach((h, idx) => {
       row[h] = values[idx] ?? "";
@@ -23,18 +64,138 @@ export function parseCSV(text: string): Record<string, string>[] {
   return rows;
 }
 
-// ─── Competencies CSV ───────────────────────────────────────────────────────
+// ─── Competencies CSV (full custom definitions) ─────────────────────────────
 
 const VALID_WEIGHTS = [0.5, 1.0, 1.5, 2.0];
 
+const REQUIRED_COMP_COLUMNS = [
+  "id", "name", "definition", "cluster",
+  "l1_indicator_1", "l1_indicator_2", "l1_indicator_3", "l1_indicator_4",
+  "l2_indicator_1", "l2_indicator_2", "l2_indicator_3", "l2_indicator_4",
+  "l3_indicator_1", "l3_indicator_2", "l3_indicator_3", "l3_indicator_4",
+];
+
+const DEFAULT_LEVEL_NAMES: Record<ProficiencyLevel, string> = { 1: "Foundational", 2: "Proficient", 3: "Strategic" };
+const DEFAULT_QUALIFIERS: Record<ProficiencyLevel, string> = { 1: "Demonstrates", 2: "Applies", 3: "Shapes" };
+const DEFAULT_LEVEL_DESCRIPTIONS: Record<ProficiencyLevel, string> = {
+  1: "Demonstrates the core behaviours in routine, well-defined situations.",
+  2: "Applies the competency independently across the full scope of the role.",
+  3: "Shapes how the competency is practised across teams and beyond.",
+};
+
+/** Detect whether the CSV has the wide custom-definition columns or just the legacy competency_id format. */
+function isCustomFormat(headers: string[]): boolean {
+  return REQUIRED_COMP_COLUMNS.every((col) => headers.includes(col));
+}
+
 export function parseCompetenciesCSV(
   rows: Record<string, string>[],
-): { data: CompetencySelection[]; errors: string[] } {
-  const data: CompetencySelection[] = [];
+): { competencies: Competency[]; selections: CompetencySelection[]; errors: string[] } {
+  if (rows.length === 0) return { competencies: [], selections: [], errors: [] };
+
+  const headers = Object.keys(rows[0]);
+
+  // Legacy format: competency_id, weight, critical (selects from dictionary)
+  if (!isCustomFormat(headers)) {
+    return parseLegacyCompetenciesCSV(rows);
+  }
+
+  // Custom full-definition format
+  const competencies: Competency[] = [];
+  const selections: CompetencySelection[] = [];
+  const errors: string[] = [];
+  const seenIds = new Set<string>();
+
+  // Check required columns
+  const missingCols = REQUIRED_COMP_COLUMNS.filter((col) => !headers.includes(col));
+  if (missingCols.length > 0) {
+    errors.push(`Missing required columns: ${missingCols.join(", ")}`);
+    return { competencies, selections, errors };
+  }
+
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2;
+    const id = row.id?.trim();
+    const name = row.name?.trim();
+    const definition = row.definition?.trim();
+    const cluster = row.cluster?.trim();
+
+    if (!id) { errors.push(`Row ${rowNum}: missing required field 'id'`); return; }
+    if (!name) { errors.push(`Row ${rowNum}: missing required field 'name'`); return; }
+    if (!definition) { errors.push(`Row ${rowNum}: missing required field 'definition'`); return; }
+    if (!cluster) { errors.push(`Row ${rowNum}: missing required field 'cluster'`); return; }
+
+    if (seenIds.has(id)) {
+      errors.push(`Row ${rowNum}: duplicate id '${id}'`);
+      return;
+    }
+    seenIds.add(id);
+
+    // Validate all 12 indicators are non-empty
+    const indicatorKeys = REQUIRED_COMP_COLUMNS.slice(4); // l1_indicator_1 ... l3_indicator_4
+    const emptyIndicators = indicatorKeys.filter((k) => !row[k]?.trim());
+    if (emptyIndicators.length > 0) {
+      errors.push(`Row ${rowNum}: empty indicators: ${emptyIndicators.join(", ")}`);
+      return;
+    }
+
+    // Build levels
+    const levels: CompetencyLevel[] = ([1, 2, 3] as ProficiencyLevel[]).map((lvl) => {
+      const prefix = `l${lvl}`;
+      return {
+        level: lvl,
+        name: row[`${prefix}_name`]?.trim() || DEFAULT_LEVEL_NAMES[lvl],
+        qualifier: row[`${prefix}_qualifier`]?.trim() || DEFAULT_QUALIFIERS[lvl],
+        description: row[`${prefix}_description`]?.trim() || DEFAULT_LEVEL_DESCRIPTIONS[lvl],
+        indicators: [
+          row[`${prefix}_indicator_1`].trim(),
+          row[`${prefix}_indicator_2`].trim(),
+          row[`${prefix}_indicator_3`].trim(),
+          row[`${prefix}_indicator_4`].trim(),
+        ],
+      };
+    });
+
+    const retailSpecific = row.retail_specific?.toLowerCase() === "true";
+    const sectorTags = row.sector_tags?.trim()
+      ? row.sector_tags.split(/[;|]/).map((t) => t.trim()).filter(Boolean)
+      : ["generic"];
+
+    competencies.push({
+      id,
+      name,
+      definition,
+      cluster,
+      retailSpecific,
+      sectorTags,
+      levels,
+    });
+
+    // Build selection
+    let weight = 1.0;
+    if (row.weight) {
+      const parsed = parseFloat(row.weight);
+      if (!isNaN(parsed) && VALID_WEIGHTS.includes(parsed)) {
+        weight = parsed;
+      }
+    }
+    const critical = row.critical?.toLowerCase() === "true";
+
+    selections.push({ competencyId: id, weight, critical });
+  });
+
+  return { competencies, selections, errors };
+}
+
+/** Legacy format: just selects from dictionary by competency_id */
+function parseLegacyCompetenciesCSV(
+  rows: Record<string, string>[],
+): { competencies: Competency[]; selections: CompetencySelection[]; errors: string[] } {
+  const selections: CompetencySelection[] = [];
   const errors: string[] = [];
 
   rows.forEach((row, idx) => {
-    const rowNum = idx + 2; // 1-indexed, +1 for header
+    const rowNum = idx + 2;
     const competencyId = row.competency_id?.trim();
     if (!competencyId) {
       errors.push(`Row ${rowNum}: missing required field 'competency_id'`);
@@ -58,11 +219,11 @@ export function parseCompetenciesCSV(
     }
 
     const critical = row.critical?.toLowerCase() === "true";
-
-    data.push({ competencyId, weight, critical });
+    selections.push({ competencyId, weight, critical });
   });
 
-  return { data, errors };
+  // Legacy format contributes no custom competencies
+  return { competencies: [], selections, errors };
 }
 
 // ─── Assessors CSV ──────────────────────────────────────────────────────────
@@ -162,16 +323,19 @@ export function parseParticipantsCSV(
 
 // ─── Template generators ────────────────────────────────────────────────────
 
+const COMPETENCIES_TEMPLATE_HEADER = "id,name,definition,cluster,l1_indicator_1,l1_indicator_2,l1_indicator_3,l1_indicator_4,l2_indicator_1,l2_indicator_2,l2_indicator_3,l2_indicator_4,l3_indicator_1,l3_indicator_2,l3_indicator_3,l3_indicator_4,weight,critical";
+const COMPETENCIES_TEMPLATE_EXAMPLE = '"strategic-thinking","Strategic Thinking","Thinks ahead and connects dots across the business.","Leadership","Identifies trends in own area.","Links decisions to broader objectives.","Considers multiple perspectives before acting.","Seeks information beyond the immediate task.","Anticipates future challenges and prepares.","Integrates cross-functional insights into plans.","Balances short-term actions with long-term goals.","Challenges assumptions with structured reasoning.","Shapes the strategic agenda for the function.","Builds foresight capability across the team.","Reframes complex problems into strategic opportunities.","Drives alignment between strategy and execution at scale.",1.0,false';
+
 export function downloadCSVTemplate(
   type: "competencies" | "assessors" | "participants",
 ) {
-  const headers: Record<typeof type, string> = {
-    competencies: "competency_id,weight,critical",
-    assessors: "name,email,role,organisation,calibrated,assigned_tools",
-    participants: "name,employee_id,current_role,business_unit,location,email,years_in_role",
+  const templates: Record<typeof type, string> = {
+    competencies: COMPETENCIES_TEMPLATE_HEADER + "\n" + COMPETENCIES_TEMPLATE_EXAMPLE + "\n",
+    assessors: "name,email,role,organisation,calibrated,assigned_tools\n",
+    participants: "name,employee_id,current_role,business_unit,location,email,years_in_role\n",
   };
 
-  const blob = new Blob([headers[type] + "\n"], { type: "text/csv" });
+  const blob = new Blob([templates[type]], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

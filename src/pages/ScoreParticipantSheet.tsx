@@ -225,7 +225,7 @@ export function ScoreParticipantSheet() {
       {/* Competency cards */}
       <div className="space-y-5">
         {tool.competencyIds.map((cid) => {
-          const competency = findCompetency(cid);
+          const competency = findCompetency(cid, engagement?.customCompetencies);
           const target = engagement.proficiencyTargets.find((t) => t.competencyId === cid);
           const draft = drafts[cid];
           if (!competency || !target || !draft) return null;

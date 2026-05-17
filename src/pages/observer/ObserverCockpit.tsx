@@ -68,7 +68,7 @@ export function ObserverCockpit() {
 
   const toolType = findToolType(tool.toolTypeKey);
   const participants = observerToolParticipants(engagement, observerId, toolId);
-  const competencies = tool.competencyIds.map((id) => findCompetency(id)).filter(Boolean);
+  const competencies = tool.competencyIds.map((id) => findCompetency(id, engagement?.customCompetencies)).filter(Boolean);
   const totalIndicators = expectedIndicators(tool);
 
   const completeCount = participants.filter((p) => {

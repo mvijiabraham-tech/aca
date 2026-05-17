@@ -105,7 +105,7 @@ export function ScoreLanding() {
             {tools.map((tool) => {
               const progress = observerToolProgress(engagement, observerId!, tool.id);
               const toolType = findToolType(tool.toolTypeKey);
-              const competencies = tool.competencyIds.map((id) => findCompetency(id)).filter(Boolean);
+              const competencies = tool.competencyIds.map((id) => findCompetency(id, engagement?.customCompetencies)).filter(Boolean);
               const overallStatus =
                 progress.complete === progress.total ? "complete" :
                 progress.complete > 0 || progress.inProgress > 0 ? "in_progress" : "not_started";

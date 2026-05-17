@@ -31,7 +31,7 @@ export function ReportGroup() {
   // Per-competency cohort summary
   const competencyStats = useMemo(() => {
     return competencies.map((sel) => {
-      const c = findCompetency(sel.competencyId);
+      const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
       const scores = participants
         .map((p) => effectiveCompetencyScore(engagement, p.id, sel.competencyId))
         .filter((s): s is number => s !== null);

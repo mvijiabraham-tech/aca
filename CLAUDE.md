@@ -69,7 +69,7 @@ src/
 
 ## State and store
 
-There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 10) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
+There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 11) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
 
 Engagements default to `[]` and are hydrated from Supabase on mount when configured. The store syncs mutations to Supabase via debounced push functions whenever `isSupabaseConfigured` is true. When Supabase is not configured (local dev), the app runs fully offline with localStorage only.
 
@@ -139,7 +139,7 @@ The build must be clean before any commit. TypeScript is strict; no errors, no w
 
 Some parts of the codebase have implicit decisions baked in. Don't change these without raising them first:
 
-- **The Zustand store schema version** (`version: 10`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
+- **The Zustand store schema version** (`version: 11`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
 - **The destination unlock logic** in `EngagementShell.tsx::isDestinationLocked`. It currently dims non-Setup destinations for Draft engagements. The internal lock gates on each landing handle finer-grained state. Don't add a third locking mechanism.
 - **The single-screen score flow** (`ScoreParticipantSheet.tsx`). Evidence textareas and indicator ratings are shown together per competency — merged from the previous two-pass design per MV's direction.
 - **The competency dictionary** in `src/mocks/dictionary.ts`. Sourced from the canonical `Competency_Map.xlsx`; changes here must round-trip back to that source.

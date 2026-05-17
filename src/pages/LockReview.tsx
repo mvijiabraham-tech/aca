@@ -155,7 +155,7 @@ export function LockReview() {
           <div className="text-2xs text-ink-500 mb-2">{engagement.competencies.length} competencies selected</div>
           <div className="space-y-1.5">
             {engagement.competencies.map((sel) => {
-              const c = findCompetency(sel.competencyId);
+              const c = findCompetency(sel.competencyId, engagement.customCompetencies);
               if (!c) return null;
               return (
                 <div key={sel.competencyId} className="flex items-center gap-2 text-xs">
@@ -172,7 +172,7 @@ export function LockReview() {
         <ReviewSection number={3} title="Proficiency targets" stepKey="proficiency" engagementId={engagementId}>
           <div className="space-y-1.5">
             {engagement.proficiencyTargets.map((t) => {
-              const c = findCompetency(t.competencyId);
+              const c = findCompetency(t.competencyId, engagement.customCompetencies);
               if (!c) return null;
               return (
                 <div key={t.competencyId} className="flex items-center gap-2 text-xs">

@@ -87,7 +87,7 @@ export function ReportIndividual() {
     const oar = computedOar(engagement!, activeParticipant.id);
     const band = oar !== null ? oarBandFor(engagement!, oar) : null;
     const profile = engagement!.competencies.map((sel) => {
-      const c = findCompetency(sel.competencyId);
+      const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
       const score = effectiveCompetencyScore(engagement!, activeParticipant.id, sel.competencyId);
       const target = engagement!.proficiencyTargets.find((t) => t.competencyId === sel.competencyId);
       return `- ${c?.name}: ${score?.toFixed(2) ?? "—"} (target L${target?.targetLevel ?? "?"}, weight ${sel.weight}${sel.critical ? ", critical" : ""})`;

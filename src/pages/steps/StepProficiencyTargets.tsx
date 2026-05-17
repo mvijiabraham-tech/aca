@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { TextArea } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
-import { dictionary, clusterMeta } from "@/mocks/dictionary";
+import { findCompetency, clusterMeta } from "@/mocks/dictionary";
 import type { ProficiencyTarget, EngagementPurpose } from "@/types";
 import type { ProficiencyLevel } from "@/types";
 
@@ -184,7 +184,7 @@ export function StepProficiencyTargets() {
       {/* Per-competency target picker */}
       <div className="space-y-4">
         {selections.map((sel) => {
-          const c = dictionary.find((x) => x.id === sel.competencyId);
+          const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
           if (!c) return null;
           const target = targetMap.get(c.id);
           const isOpen = rationaleOpen === c.id;

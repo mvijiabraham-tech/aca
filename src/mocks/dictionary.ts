@@ -1,4 +1,4 @@
-import type { Competency, ClusterMeta, ClusterKey } from "@/types";
+import type { Competency, ClusterMeta } from "@/types";
 
 // 7 competencies sourced from Synovate's Competency Map.
 // Each competency has 3 proficiency levels with 4 indicators per level.
@@ -10,7 +10,7 @@ export const clusters: ClusterMeta[] = [
   { key: "market",   label: "Market & business",          description: "Domain knowledge. May be sector-specific." },
 ];
 
-export const clusterMeta = (key: ClusterKey): ClusterMeta | undefined =>
+export const clusterMeta = (key: string): ClusterMeta | undefined =>
   clusters.find((c) => c.key === key);
 
 export const dictionary: Competency[] = [
@@ -338,5 +338,5 @@ export const dictionary: Competency[] = [
   },
 ];
 
-export const findCompetency = (id: string): Competency | undefined =>
-  dictionary.find((c) => c.id === id);
+export const findCompetency = (id: string, customCompetencies?: Competency[]): Competency | undefined =>
+  customCompetencies?.find((c) => c.id === id) ?? dictionary.find((c) => c.id === id);

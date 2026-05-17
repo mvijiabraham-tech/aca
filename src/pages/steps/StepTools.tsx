@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Field, TextInput, NumberInput, Select } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
-import { dictionary, clusterMeta } from "@/mocks/dictionary";
+import { findCompetency, clusterMeta } from "@/mocks/dictionary";
 import { toolLibrary, findToolType, formatLabel } from "@/mocks/toolLibrary";
 import type { EngagementTool } from "@/types";
 
@@ -240,7 +240,7 @@ export function StepTools() {
                     <Field label="Competencies this tool surfaces" required hint="Pick at least one. Two-three is typical.">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
                         {selections.map((sel) => {
-                          const c = dictionary.find((x) => x.id === sel.competencyId);
+                          const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
                           if (!c) return null;
                           const target = targets.find((t) => t.competencyId === c.id);
                           const isChecked = tool.competencyIds.includes(c.id);
@@ -286,7 +286,7 @@ export function StepTools() {
                         </div>
                         <div className="space-y-3">
                           {tool.competencyIds.map((cid) => {
-                            const c = dictionary.find((x) => x.id === cid);
+                            const c = findCompetency(cid, engagement?.customCompetencies);
                             const target = targets.find((t) => t.competencyId === cid);
                             if (!c || !target) return null;
                             const level = c.levels.find((l) => l.level === target.targetLevel);
@@ -403,7 +403,7 @@ export function StepTools() {
               </thead>
               <tbody className="divide-y divide-ink-100">
                 {coverage.map((cov) => {
-                  const c = dictionary.find((x) => x.id === cov.competencyId);
+                  const c = findCompetency(cov.competencyId, engagement?.customCompetencies);
                   if (!c) return null;
                   return (
                     <tr key={cov.competencyId}>

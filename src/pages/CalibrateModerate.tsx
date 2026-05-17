@@ -152,7 +152,7 @@ export function CalibrateModerate() {
               </div>
               <CardBody className="space-y-3">
                 {competencies.map((sel: CompetencySelection) => {
-                  const c = findCompetency(sel.competencyId);
+                  const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
                   if (!c) return null;
                   const computed = computedCompetencyScore(engagement, activeParticipant.id, sel.competencyId);
                   const effective = effectiveCompetencyScore(engagement, activeParticipant.id, sel.competencyId);
