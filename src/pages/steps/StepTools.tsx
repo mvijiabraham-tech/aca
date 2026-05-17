@@ -24,6 +24,10 @@ export function StepTools() {
   const setStepStatus = useAppStore((s) => s.setStepStatus);
 
   const [addingTool, setAddingTool] = useState(false);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customDuration, setCustomDuration] = useState(60);
+  const [customFormat, setCustomFormat] = useState<EngagementTool["format"]>("individual_interactive");
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
   const [showCsvHint, setShowCsvHint] = useState(false);
   const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -109,6 +113,25 @@ export function StepTools() {
     };
     setTools(engagement.id, [...tools, newTool]);
     setAddingTool(false);
+    setExpandedToolId(newTool.id);
+  }
+
+  function addCustomTool() {
+    if (!engagement || !customName.trim()) return;
+    const newTool: EngagementTool = {
+      id: `t-${Date.now()}`,
+      name: customName.trim(),
+      toolTypeKey: "custom",
+      competencyIds: [],
+      durationMinutes: customDuration,
+      format: customFormat,
+    };
+    setTools(engagement.id, [...tools, newTool]);
+    setAddingTool(false);
+    setAddingCustom(false);
+    setCustomName("");
+    setCustomDuration(60);
+    setCustomFormat("individual_interactive");
     setExpandedToolId(newTool.id);
   }
 
@@ -263,7 +286,7 @@ export function StepTools() {
                         <h4 className="text-base font-semibold text-navy-700 display-serif">
                           {tool.name}
                         </h4>
-                        <Badge tone="neutral">{def?.name}</Badge>
+                        <Badge tone="neutral">{def?.name ?? "Custom"}</Badge>
                         {tool.competencyIds.length === 0 && (
                           <Badge tone="amber">No competencies</Badge>
                         )}
@@ -424,34 +447,94 @@ export function StepTools() {
         <Card>
           <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-navy-700">Choose a tool type</h3>
-              <p className="text-2xs text-ink-500 mt-0.5">10 standard types pre-loaded. Custom types coming in v1.</p>
+              <h3 className="text-sm font-semibold text-navy-700">
+                {addingCustom ? "Add custom tool" : "Choose a tool type"}
+              </h3>
+              <p className="text-2xs text-ink-500 mt-0.5">
+                {addingCustom ? "Define your own tool with a custom name, duration, and format." : "Pick a standard type or create a custom tool."}
+              </p>
             </div>
-            <button onClick={() => setAddingTool(false)} className="text-ink-400 hover:text-navy-700">
+            <button onClick={() => { setAddingTool(false); setAddingCustom(false); }} className="text-ink-400 hover:text-navy-700">
               <X size={16} />
             </button>
           </div>
           <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {toolLibrary.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => addTool(t.key)}
-                  className="text-left p-3 rounded-md border-2 border-ink-200 bg-white hover:border-ocean-400 hover:bg-ocean-50/30 transition-all"
-                >
-                  <div className="flex items-start gap-3">
-                    <Wrench size={16} className="text-ocean-600 flex-shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-navy-700">{t.name}</div>
-                      <div className="text-2xs text-ink-500 mt-0.5 leading-snug line-clamp-2">{t.description}</div>
-                      <div className="text-2xs text-ink-400 mt-1 font-mono">
-                        {t.defaultDurationMinutes}m · {formatLabel(t.defaultFormat)}
+            {addingCustom ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Field label="Tool name" required>
+                    <TextInput
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      placeholder="e.g. Strategy presentation"
+                      autoFocus
+                    />
+                  </Field>
+                  <Field label="Duration (minutes)" required>
+                    <NumberInput
+                      value={customDuration}
+                      onChange={(e) => setCustomDuration(parseInt(e.target.value, 10) || 0)}
+                      min={5}
+                    />
+                  </Field>
+                  <Field label="Delivery format" required>
+                    <Select
+                      value={customFormat}
+                      onChange={(e) => setCustomFormat(e.target.value as EngagementTool["format"])}
+                    >
+                      <option value="individual_written">Individual · written</option>
+                      <option value="individual_interactive">Individual · interactive</option>
+                      <option value="group_interactive">Group · interactive</option>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <Button variant="primary" onClick={addCustomTool} disabled={!customName.trim()}>
+                    <Plus size={13} /> Add tool
+                  </Button>
+                  <Button variant="secondary" onClick={() => setAddingCustom(false)}>
+                    ← Back to library
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {toolLibrary.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => addTool(t.key)}
+                      className="text-left p-3 rounded-md border-2 border-ink-200 bg-white hover:border-ocean-400 hover:bg-ocean-50/30 transition-all"
+                    >
+                      <div className="flex items-start gap-3">
+                        <Wrench size={16} className="text-ocean-600 flex-shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-navy-700">{t.name}</div>
+                          <div className="text-2xs text-ink-500 mt-0.5 leading-snug line-clamp-2">{t.description}</div>
+                          <div className="text-2xs text-ink-400 mt-1 font-mono">
+                            {t.defaultDurationMinutes}m · {formatLabel(t.defaultFormat)}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="pt-2 border-t border-ink-200">
+                  <button
+                    onClick={() => setAddingCustom(true)}
+                    className="w-full text-left p-3 rounded-md border-2 border-dashed border-ink-300 bg-ink-100/30 hover:border-ocean-400 hover:bg-ocean-50/30 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Plus size={16} className="text-ocean-600 flex-shrink-0" />
+                      <div>
+                        <div className="text-sm font-semibold text-navy-700">Custom tool</div>
+                        <div className="text-2xs text-ink-500 mt-0.5">Define your own tool with a custom name, duration, and format.</div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                </div>
+              </div>
+            )}
           </CardBody>
         </Card>
       )}
@@ -477,7 +560,7 @@ export function StepTools() {
                   <th className="pb-2 pr-3 font-semibold text-2xs uppercase tracking-wider text-ink-500">Competency</th>
                   {tools.map((t) => (
                     <th key={t.id} className="pb-2 px-2 font-semibold text-2xs text-ink-500 text-center min-w-[80px]" title={t.name}>
-                      <div className="truncate max-w-[100px] mx-auto">{findToolType(t.toolTypeKey)?.name.split(" ")[0]}</div>
+                      <div className="truncate max-w-[100px] mx-auto">{findToolType(t.toolTypeKey)?.name.split(" ")[0] ?? t.name.split(" ")[0]}</div>
                     </th>
                   ))}
                   <th className="pb-2 pl-3 font-semibold text-2xs uppercase tracking-wider text-ink-500 text-right">Tools</th>

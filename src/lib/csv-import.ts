@@ -325,7 +325,7 @@ export function parseParticipantsCSV(
 // ─── Tools CSV ──────────────────────────────────────────────────────────────
 
 const VALID_FORMATS: ToolFormat[] = ["individual_written", "individual_interactive", "group_interactive"];
-const TOOL_TYPE_KEYS = toolLibrary.map((t) => t.key);
+const TOOL_TYPE_KEYS = [...toolLibrary.map((t) => t.key), "custom"];
 
 export function parseToolsCSV(
   rows: Record<string, string>[],
@@ -346,10 +346,10 @@ export function parseToolsCSV(
       return;
     }
 
-    const def = toolLibrary.find((t) => t.key === toolType)!;
+    const def = toolLibrary.find((t) => t.key === toolType);
 
     // Parse duration
-    let durationMinutes = def.defaultDurationMinutes;
+    let durationMinutes = def?.defaultDurationMinutes ?? 60;
     if (row.duration_minutes?.trim()) {
       const parsed = parseInt(row.duration_minutes, 10);
       if (isNaN(parsed) || parsed < 1) {
@@ -360,7 +360,7 @@ export function parseToolsCSV(
     }
 
     // Parse format
-    let format: ToolFormat = def.defaultFormat;
+    let format: ToolFormat = def?.defaultFormat ?? "individual_interactive";
     if (row.format?.trim()) {
       const f = row.format.trim().toLowerCase() as ToolFormat;
       if (!VALID_FORMATS.includes(f)) {
