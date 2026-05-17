@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   ArrowRight, Plus, Wrench, X, AlertTriangle, CheckCircle2,
-  ChevronDown, ChevronRight, Layers, Clock, Users,
+  ChevronDown, ChevronRight, Layers, Clock, Users, Upload, Download, Info, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -13,6 +13,7 @@ import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
 import { findCompetency, clusterMeta } from "@/mocks/dictionary";
 import { toolLibrary, findToolType, formatLabel } from "@/mocks/toolLibrary";
+import { parseCSV, parseToolsCSV, downloadCSVTemplate } from "@/lib/csv-import";
 import type { EngagementTool } from "@/types";
 
 export function StepTools() {
@@ -24,6 +25,9 @@ export function StepTools() {
 
   const [addingTool, setAddingTool] = useState(false);
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
+  const [showCsvHint, setShowCsvHint] = useState(false);
+  const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = engagement?.tools ?? [];
   const selections = engagement?.competencies ?? [];
@@ -128,17 +132,95 @@ export function StepTools() {
     setTools(engagement.id, tools.filter((t) => t.id !== toolId));
   }
 
+  function handleCSVUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !engagement) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        setCsvMessage({ type: "error", text: "CSV is empty or has no data rows." });
+        return;
+      }
+      const competencyIds = selections.map((s) => s.competencyId);
+      const { data, errors } = parseToolsCSV(rows, competencyIds);
+      if (errors.length > 0) {
+        setCsvMessage({ type: "error", text: errors.join(" · ") });
+      }
+      if (data.length > 0) {
+        setTools(engagement.id, [...tools, ...data]);
+        setCsvMessage({ type: "success", text: `${data.length} tool${data.length === 1 ? "" : "s"} imported.${errors.length > 0 ? ` ${errors.length} row(s) skipped.` : ""}` });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   return (
     <div className="space-y-6">
       <StepPageHeader
         engagementId={engagementId}
         stepKey="tools"
         actions={
-          <Button variant="primary" onClick={() => setAddingTool(true)}>
-            <Plus size={13} /> Add tool
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setShowCsvHint((v) => !v)}>
+              <Upload size={13} /> Upload CSV
+            </Button>
+            <Button variant="primary" onClick={() => setAddingTool(true)}>
+              <Plus size={13} /> Add tool
+            </Button>
+          </>
         }
       />
+
+      {/* CSV upload banner */}
+      {showCsvHint && (
+        <div className="bg-ocean-50/50 border border-ocean-300/50 rounded-lg p-4 flex items-start gap-3">
+          <Info size={16} className="text-ocean-700 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs text-ink-700 leading-relaxed">
+            <div className="font-semibold text-navy-700 mb-1">Upload tools via CSV</div>
+            CSV with columns: <strong>name</strong>, <strong>tool_type</strong>, competencies (semicolon-separated IDs), duration_minutes, format, notes.
+            <br />
+            Valid tool types: {toolLibrary.map((t) => t.key).join(", ")}.
+            <br />
+            Valid formats: individual_written, individual_interactive, group_interactive.
+            <div className="mt-1 text-2xs text-ink-500">
+              Imported tools are appended to existing ones.
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleCSVUpload}
+              />
+              <Button variant="secondary" size="sm" onClick={() => downloadCSVTemplate("tools")}>
+                <Download size={12} /> Download template
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={12} /> Upload file
+              </Button>
+            </div>
+          </div>
+          <button onClick={() => setShowCsvHint(false)} className="text-ink-400 hover:text-navy-700">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {csvMessage && (
+        <div className={cn(
+          "rounded-lg border px-4 py-3 text-sm flex items-start gap-2",
+          csvMessage.type === "success"
+            ? "bg-green-50 border-green-300 text-green-800"
+            : "bg-amber-50 border-amber-300 text-amber-800",
+        )}>
+          {csvMessage.type === "success" ? <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />}
+          <span>{csvMessage.text}</span>
+        </div>
+      )}
 
       {/* Tools list */}
       {tools.length === 0 && !addingTool && (
