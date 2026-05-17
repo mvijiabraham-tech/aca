@@ -54,7 +54,9 @@ src/
 │   ├── cn.ts                          # Tailwind class merge helper
 │   ├── store.ts                       # Zustand store (single source of truth)
 │   ├── scoring.ts                     # Score-destination helper computations
-│   └── calibrate.ts                   # Calibrate-destination helper computations
+│   ├── calibrate.ts                   # Calibrate-destination helper computations
+│   ├── export-report.ts              # Individual report PDF generation (jsPDF + autoTable)
+│   └── csv-import.ts                 # CSV parsing + validation for setup step bulk import
 ├── mocks/
 │   ├── dictionary.ts                  # Competency dictionary (from Competency_Map.xlsx)
 │   └── toolLibrary.ts                 # AC tool catalog
@@ -143,26 +145,30 @@ Some parts of the codebase have implicit decisions baked in. Don't change these 
 - **The competency dictionary** in `src/mocks/dictionary.ts`. Sourced from the canonical `Competency_Map.xlsx`; changes here must round-trip back to that source.
 - **The OAR band thresholds** in `DEFAULT_AGGREGATION`. These are configurable per engagement but the defaults reflect Synovate's standard methodology.
 
-## What's deliberately stubbed (carrying forward to v1.1+)
+## What's deliberately stubbed (carrying forward to v1.2+)
 
 These are not bugs; they're conscious deferrals:
 
 - **AI drafting in Report Individual** is prompt generation, not direct API calls. Coach pastes into Claude or preferred model externally.
 - **Activation handoff to Actifyr** shows the payload on screen but no actual POST.
-- **PDF / PPTX export** of individual reports is not yet implemented.
+- **PPTX export** of individual reports is not yet implemented (PDF is done).
 - **Post-lock amendments** — moderated scores stay editable in the store but the UI doesn't expose edit affordances after sign-off.
 - **Audit log** — no history of who-moderated-what-when.
 - **Mobile scoring** — desktop / tablet only.
 
-## When working on v1.1+
+## What shipped in v1.1
 
-The v1.1 priorities, in order:
+- **PDF export of individual reports** (`src/lib/export-report.ts`). `generateIndividualReportPDF()` produces a branded A4 PDF: navy cover page, competency score table (autoTable), narrative sections with auto page breaks, CONFIDENTIAL headers/footers. Download button in ReportIndividual.tsx, enabled when ≥1 section is signed off. `buildIndividualReportDoc()` is also exported for headless/test use.
+- **CSV bulk import for setup steps** (`src/lib/csv-import.ts`). Upload CSV files to populate Competencies (Step 2, replaces selection), Assessors (Step 6, appends), and Participants (Step 7, appends). Each step has Upload CSV + Download Template buttons with inline success/error feedback. Validators check required fields, dictionary IDs, role enums, weight values, and tool IDs.
 
-1. Real PDF export of individual reports
-2. Direct AI integration for Report drafting (replacing prompt generation)
-3. Actifyr handoff API integration
-4. Reopen-for-amendment workflow with audit log
-5. Per-participant cohort comparison view inside Report Individual
+## When working on v1.2+
+
+The v1.2 priorities, in order:
+
+1. Direct AI integration for Report drafting (replacing prompt generation)
+2. Actifyr handoff API integration
+3. Reopen-for-amendment workflow with audit log
+4. Per-participant cohort comparison view inside Report Individual
 
 For each: write the change in a feature branch (`git checkout -b feat/<name>`), run `npm run verify` clean, commit, merge back to main only after testing a full engagement walkthrough still works.
 
