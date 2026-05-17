@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   ArrowRight, Search, Upload, CheckCircle2, ChevronDown, ChevronRight,
-  AlertTriangle, X, Info, Star,
+  AlertTriangle, X, Info, Star, Download, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/Card";
@@ -12,6 +12,7 @@ import { Field, TextInput } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
 import { dictionary, clusters, clusterMeta } from "@/mocks/dictionary";
+import { parseCSV, parseCompetenciesCSV, downloadCSVTemplate } from "@/lib/csv-import";
 import type { CompetencySelection } from "@/types";
 
 const MIN_SELECTED = 4;
@@ -26,6 +27,8 @@ export function StepCompetencies() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCsvHint, setShowCsvHint] = useState(false);
+  const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Current selections from store
   const selectedMap = useMemo(() => {
@@ -71,6 +74,31 @@ export function StepCompetencies() {
     setCompetencies(engagement.id, next);
   }
 
+  function handleCSVUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !engagement) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        setCsvMessage({ type: "error", text: "CSV is empty or has no data rows." });
+        return;
+      }
+      const { data, errors } = parseCompetenciesCSV(rows);
+      if (errors.length > 0) {
+        setCsvMessage({ type: "error", text: errors.join(" · ") });
+      }
+      if (data.length > 0) {
+        // Replace: CSV defines the full competency selection
+        setCompetencies(engagement.id, data);
+        setCsvMessage({ type: "success", text: `${data.length} competenc${data.length === 1 ? "y" : "ies"} imported.${errors.length > 0 ? ` ${errors.length} row(s) skipped.` : ""}` });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   // Filtered + grouped
   const filteredByCluster = useMemo(() => {
     const map: Record<string, typeof dictionary> = {};
@@ -100,22 +128,45 @@ export function StepCompetencies() {
         }
       />
 
-      {/* CSV hint banner */}
+      {/* CSV upload banner */}
       {showCsvHint && (
         <div className="bg-ocean-50/50 border border-ocean-300/50 rounded-lg p-4 flex items-start gap-3">
           <Info size={16} className="text-ocean-700 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-xs text-ink-700 leading-relaxed">
-            <div className="font-semibold text-navy-700 mb-1">Upload custom competencies via CSV</div>
-            For engagements that use a client's own framework. Download the template, populate with your competencies (name, definition, cluster, 3 levels × 4 indicators), and upload. The system validates structure on upload.
+            <div className="font-semibold text-navy-700 mb-1">Upload competency selections via CSV</div>
+            CSV with columns: competency_id, weight, critical. The competency_id must match an entry in the Synovate dictionary.
+            Uploading replaces the current selection.
             <div className="mt-2 flex items-center gap-2">
-              <Button variant="secondary" size="sm">Download template</Button>
-              <Button variant="ghost" size="sm">Upload file…</Button>
-              <span className="text-2xs text-ink-500 ml-1">CSV upload coming in v1.</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleCSVUpload}
+              />
+              <Button variant="secondary" size="sm" onClick={() => downloadCSVTemplate("competencies")}>
+                <Download size={12} /> Download template
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={12} /> Upload file
+              </Button>
             </div>
           </div>
           <button onClick={() => setShowCsvHint(false)} className="text-ink-400 hover:text-navy-700">
             <X size={14} />
           </button>
+        </div>
+      )}
+
+      {csvMessage && (
+        <div className={cn(
+          "rounded-lg border px-4 py-3 text-sm flex items-start gap-2",
+          csvMessage.type === "success"
+            ? "bg-green-50 border-green-300 text-green-800"
+            : "bg-amber-50 border-amber-300 text-amber-800",
+        )}>
+          {csvMessage.type === "success" ? <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />}
+          <span>{csvMessage.text}</span>
         </div>
       )}
 

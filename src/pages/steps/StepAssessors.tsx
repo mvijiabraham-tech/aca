@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   ArrowRight, Plus, Trash2, ChevronDown, ChevronRight,
-  UserCheck, ShieldCheck, AlertCircle, Mail,
+  UserCheck, ShieldCheck, AlertCircle, Mail, Upload, Download, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Field, TextInput, Select, Checkbox } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
+import { parseCSV, parseAssessorsCSV, downloadCSVTemplate } from "@/lib/csv-import";
 import type { Assessor, AssessorRole } from "@/types";
 
 const ROLE_META: Record<AssessorRole, { label: string; description: string; tone: "navy" | "ocean" | "neutral" }> = {
@@ -27,6 +28,8 @@ export function StepAssessors() {
   const setStepStatus = useAppStore((s) => s.setStepStatus);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const assessors = engagement?.assessors ?? [];
   const tools = engagement?.tools ?? [];
@@ -85,6 +88,30 @@ export function StepAssessors() {
     updateAssessor(assessorId, { assignedToolIds: ids });
   }
 
+  function handleCSVUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !engagement) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        setCsvMessage({ type: "error", text: "CSV is empty or has no data rows." });
+        return;
+      }
+      const { data, errors } = parseAssessorsCSV(rows, tools.map((t) => t.id));
+      if (errors.length > 0) {
+        setCsvMessage({ type: "error", text: errors.join(" · ") });
+      }
+      if (data.length > 0) {
+        setAssessors(engagement.id, [...assessors, ...data]);
+        setCsvMessage({ type: "success", text: `${data.length} assessor${data.length === 1 ? "" : "s"} imported.${errors.length > 0 ? ` ${errors.length} row(s) skipped.` : ""}` });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   // Empty state: no tools yet — they need Step 4 first
   if (tools.length === 0) {
     return (
@@ -139,6 +166,48 @@ export function StepAssessors() {
           </div>
         </CardBody>
       </Card>
+
+      {/* CSV upload */}
+      <Card className="border-ocean-200/60 bg-ocean-50/30">
+        <CardBody className="py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-md bg-ocean-100 text-ocean-700 flex items-center justify-center flex-shrink-0">
+              <Upload size={16} />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-navy-700">Bulk import via CSV</div>
+              <div className="text-2xs text-ink-500 mt-0.5">
+                Upload a CSV with columns: name, email, role, organisation, calibrated, assigned_tools
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCSVUpload}
+            />
+            <Button variant="ghost" size="sm" onClick={() => downloadCSVTemplate("assessors")}>
+              <Download size={12} /> Template
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Upload size={12} /> Upload CSV
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
+
+      {csvMessage && (
+        <div className={cn(
+          "rounded-lg border px-4 py-3 text-sm flex items-start gap-2",
+          csvMessage.type === "success"
+            ? "bg-green-50 border-green-300 text-green-800"
+            : "bg-amber-50 border-amber-300 text-amber-800",
+        )}>
+          {csvMessage.type === "success" ? <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />}
+          <span>{csvMessage.text}</span>
+        </div>
+      )}
 
       {/* Assessor list */}
       <div className="space-y-3">

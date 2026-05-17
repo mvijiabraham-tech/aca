@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { generateWithClaude } from "@/lib/ai";
+import { generateIndividualReportPDF } from "@/lib/export-report";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -260,16 +261,26 @@ INSTRUCTIONS
                       {activeParticipant.businessUnit && ` · ${activeParticipant.businessUnit}`}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xs uppercase tracking-wider font-semibold text-ink-500">OAR</div>
-                    <div className="font-mono text-2xl font-bold text-navy-700 leading-tight">
-                      {oar !== null ? oar.toFixed(2) : "—"}
+                  <div className="flex items-center gap-4">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={participantSections.filter((s) => s.status === "signed_off").length === 0}
+                      onClick={() => generateIndividualReportPDF(engagement, activeParticipant)}
+                    >
+                      <Download size={12} /> Download PDF
+                    </Button>
+                    <div className="text-right">
+                      <div className="text-2xs uppercase tracking-wider font-semibold text-ink-500">OAR</div>
+                      <div className="font-mono text-2xl font-bold text-navy-700 leading-tight">
+                        {oar !== null ? oar.toFixed(2) : "—"}
+                      </div>
+                      {band && (
+                        <Badge tone={OAR_BAND_META[band].tone} className="mt-1">
+                          {OAR_BAND_META[band].label}
+                        </Badge>
+                      )}
                     </div>
-                    {band && (
-                      <Badge tone={OAR_BAND_META[band].tone} className="mt-1">
-                        {OAR_BAND_META[band].label}
-                      </Badge>
-                    )}
                   </div>
                 </CardBody>
               </Card>
