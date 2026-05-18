@@ -69,7 +69,7 @@ src/
 
 ## State and store
 
-There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 11) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
+There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 12) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
 
 Engagements default to `[]` and are hydrated from Supabase on mount when configured. The store syncs mutations to Supabase via debounced push functions whenever `isSupabaseConfigured` is true. When Supabase is not configured (local dev), the app runs fully offline with localStorage only.
 
@@ -139,7 +139,7 @@ The build must be clean before any commit. TypeScript is strict; no errors, no w
 
 Some parts of the codebase have implicit decisions baked in. Don't change these without raising them first:
 
-- **The Zustand store schema version** (`version: 11`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
+- **The Zustand store schema version** (`version: 12`). Bumping it is fine when you change the persisted shape; downgrading or removing the persist middleware will lose users' work.
 - **The destination unlock logic** in `EngagementShell.tsx::isDestinationLocked`. It currently dims non-Setup destinations for Draft engagements. The internal lock gates on each landing handle finer-grained state. Don't add a third locking mechanism.
 - **The single-screen score flow** (`ScoreParticipantSheet.tsx`). Evidence textareas and indicator ratings are shown together per competency — merged from the previous two-pass design per MV's direction.
 - **The competency dictionary** in `src/mocks/dictionary.ts`. Sourced from the canonical `Competency_Map.xlsx`; changes here must round-trip back to that source.
@@ -158,7 +158,7 @@ These are not bugs; they're conscious deferrals:
 
 ## What shipped in v1.1
 
-- **PDF export of individual reports** (`src/lib/export-report.ts`). `generateIndividualReportPDF()` produces a branded A4 PDF: navy cover page, competency score table (autoTable), narrative sections with auto page breaks, CONFIDENTIAL headers/footers. Download button in ReportIndividual.tsx, enabled when ≥1 section is signed off. `buildIndividualReportDoc()` is also exported for headless/test use.
+- **PDF export of individual reports** (`src/lib/export-report.ts`). `generateIndividualReportPDF()` produces a branded A4 PDF structured in 3 parts: **Part 1 — Background & Context** (cover page, admin-editable AC context paragraph via `acContext` on `ReportFormat`, engagement metadata table, executive summary, construct/methodology page with MTMM rationale, tools×competencies matrix, aggregation summary, assessor panel); **Part 2 — Individual Assessment** (radar chart + OAR scale overview, competency score table, strengths & development snapshot bar chart, evidence highlights with quote blocks, competency profile narrative, indicator evidence narrative); **Part 3 — Development & Next Steps** (development areas narrative, recommended next steps narrative, blank action plan worksheet table, 90-day reflection template). Part divider pages with navy banners separate each section. Download button in ReportIndividual.tsx, enabled when ≥1 section is signed off. `buildIndividualReportDoc()` is also exported for headless/test use. Individual narrative sections are rendered via `renderNarrativeSection(doc, engagement, participant, sectionKey)` so they can be placed in the correct part.
 - **CSV bulk import for setup steps** (`src/lib/csv-import.ts`). Upload CSV files to populate Competencies (Step 2, replaces selection), Assessors (Step 6, appends), and Participants (Step 7, appends). Each step has Upload CSV + Download Template buttons with inline success/error feedback. Validators check required fields, dictionary IDs, role enums, weight values, and tool IDs.
 
 ## When working on v1.2+
