@@ -1,14 +1,16 @@
 import { useNavigate, useParams } from "react-router-dom";
+import { useState } from "react";
 import {
   CheckCircle2, Circle, Clock3, Sparkles, Lock, ArrowRight,
   Layers, Target, Wrench, Calculator, Users, UserCheck,
-  CalendarDays, FileText, Building2,
+  CalendarDays, FileText, Building2, FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { useEngagement } from "@/lib/store";
+import { useEngagement, useAppStore } from "@/lib/store";
+import { seedTestData } from "@/lib/seed-test-data";
 import type { SetupStep, StepStatus, StepKey } from "@/types";
 
 const stepIcons: Record<StepKey, typeof Building2> = {
@@ -27,6 +29,8 @@ export function SetupDashboard() {
   const { engagementId } = useParams<{ engagementId: string }>();
   const engagement = useEngagement(engagementId);
   const navigate = useNavigate();
+  const store = useAppStore();
+  const [seedStatus, setSeedStatus] = useState<string | null>(null);
 
   if (!engagement) return null;
 
@@ -145,6 +149,48 @@ export function SetupDashboard() {
           />
         ))}
       </div>
+
+      {/* Dev: seed test data */}
+      {engagement.participants.length > 0 && engagement.tools.length > 0 && engagement.assessors.length > 0 && (
+        <Card className="border-dashed border-ink-300 bg-ink-100/20">
+          <div className="p-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <FlaskConical size={18} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-navy-700">Seed test data</div>
+                <div className="text-2xs text-ink-500 mt-0.5">
+                  Populate scoring, calibration, and report sections for the first 2 participants. Locks the engagement if still draft.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {seedStatus && (
+                <span className="text-2xs text-green-700 font-medium">{seedStatus}</span>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const result = seedTestData(engagement, {
+                    lockEngagement: store.lockEngagement,
+                    upsertScore: store.upsertScore,
+                    upsertModeratedScore: store.upsertModeratedScore,
+                    upsertOar: store.upsertOar,
+                    setCalibrateStage: store.setCalibrateStage,
+                    signOffCalibrate: store.signOffCalibrate,
+                    upsertReportSection: store.upsertReportSection,
+                  });
+                  setSeedStatus(`Seeded ${result.seededCount} participants`);
+                }}
+              >
+                <FlaskConical size={13} /> Seed data
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
