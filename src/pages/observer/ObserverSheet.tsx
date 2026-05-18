@@ -124,7 +124,7 @@ export function ObserverSheet() {
     persistCompetency(cid, { ...current, indicators: newIndicators });
   }
 
-  function setNotes(cid: string, field: "whatWasDoneWell" | "whatCouldBeBetter", value: string) {
+  function setNotes(cid: string, field: "whatWasDoneWell" | "whatCouldBeBetter" | "verbatimObservations" | "otherNotableInsights", value: string) {
     const current = drafts[cid];
     if (!current) return;
     persistCompetency(cid, { ...current, [field]: value });

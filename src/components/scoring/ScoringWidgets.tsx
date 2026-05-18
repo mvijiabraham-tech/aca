@@ -23,7 +23,7 @@ export interface CompetencyScoreCardProps {
   isComplete: boolean;
   size?: "default" | "touch";
   onIndicator: (idx: number, change: Partial<IndicatorScore>) => void;
-  onNotes: (field: "whatWasDoneWell" | "whatCouldBeBetter", value: string) => void;
+  onNotes: (field: "whatWasDoneWell" | "whatCouldBeBetter" | "verbatimObservations" | "otherNotableInsights", value: string) => void;
 }
 
 export function CompetencyScoreCard({
@@ -85,6 +85,44 @@ export function CompetencyScoreCard({
               onChange={(e) => onNotes("whatCouldBeBetter", e.target.value)}
               disabled={isComplete}
               placeholder="Gaps, development areas, or moments to probe further."
+              rows={textareaRows}
+              className={cn(
+                "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",
+                textareaClass,
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Optional observation fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-2xs uppercase tracking-wider font-semibold text-navy-700 block mb-1.5">
+              Verbatim observations
+              <span className="font-normal text-ink-400 ml-1">(optional)</span>
+            </label>
+            <textarea
+              value={draft.verbatimObservations ?? ""}
+              onChange={(e) => onNotes("verbatimObservations", e.target.value)}
+              disabled={isComplete}
+              placeholder="Notable quotes or narrations captured word-for-word."
+              rows={textareaRows}
+              className={cn(
+                "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",
+                textareaClass,
+              )}
+            />
+          </div>
+          <div>
+            <label className="text-2xs uppercase tracking-wider font-semibold text-navy-700 block mb-1.5">
+              Other notable insights
+              <span className="font-normal text-ink-400 ml-1">(optional)</span>
+            </label>
+            <textarea
+              value={draft.otherNotableInsights ?? ""}
+              onChange={(e) => onNotes("otherNotableInsights", e.target.value)}
+              disabled={isComplete}
+              placeholder="Outlier observations not directly tied to this competency."
               rows={textareaRows}
               className={cn(
                 "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",

@@ -365,6 +365,8 @@ export interface CompetencyScore {
   indicators: IndicatorScore[];           // 4 indicators, by position 0-3
   whatWasDoneWell?: string;
   whatCouldBeBetter?: string;
+  verbatimObservations?: string;
+  otherNotableInsights?: string;
 }
 
 // All scores from one observer, for one participant, on one tool
