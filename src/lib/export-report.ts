@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { findCompetency } from "@/mocks/dictionary";
 import {
-  effectiveCompetencyScore, computedOar, oarBandFor,
+  effectiveCompetencyScore, computedOar, oarBandFor, groupAverageScores,
 } from "@/lib/calibrate";
 import { OAR_BAND_META } from "@/types";
 import type {
@@ -136,6 +136,7 @@ function collectEvidence(
 function renderRadarChart(
   doc: jsPDF, cx: number, cy: number, radius: number,
   labels: string[], scores: (number | null)[], targets: (number | null)[],
+  groupAverages?: (number | null)[],
 ) {
   const n = labels.length;
   if (n < 3) return;
@@ -146,6 +147,10 @@ function renderRadarChart(
     const r = radius * (lv / 5);
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
   };
+
+  // Fill outermost polygon with light grey
+  doc.setFillColor(245, 245, 245);
+  drawPolygon(doc, Array.from({ length: n }, (_, i) => vtx(5, i)), "F");
 
   // Concentric grid
   doc.setDrawColor(215, 215, 215);
@@ -165,6 +170,25 @@ function renderRadarChart(
   doc.setLineWidth(0.6);
   drawPolygon(doc, targets.map((t, i) => vtx(t ?? 3, i)), "FD");
 
+  // Group average polygon (dashed brown/orange line)
+  if (groupAverages && groupAverages.some((g) => g !== null)) {
+    const gaVerts = groupAverages.map((g, i) => vtx(g ?? 0, i));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ctx = (doc as any).context2d?.context || (doc as any).internal?.context;
+    void ctx; // not needed — use setLineDashPattern
+    doc.setDrawColor(180, 100, 30); // brown/orange
+    doc.setLineWidth(0.6);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([2, 1.5], 0);
+    drawPolygon(doc, gaVerts, "S");
+    // Reset dash
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([], 0);
+    // Dot markers
+    doc.setFillColor(180, 100, 30);
+    for (const [gx, gy] of gaVerts) doc.circle(gx, gy, 0.7, "F");
+  }
+
   // Score polygon (darker fill)
   if (scores.some((s) => s !== null)) {
     doc.setFillColor(130, 185, 215);
@@ -174,15 +198,30 @@ function renderRadarChart(
     drawPolygon(doc, sVerts, "FD");
     doc.setFillColor(...NAVY);
     for (const [sx, sy] of sVerts) doc.circle(sx, sy, 1, "F");
+
+    // Score value labels at each vertex (10pt bold navy, offset outward)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...NAVY);
+    for (let i = 0; i < n; i++) {
+      if (scores[i] === null) continue;
+      const a = start + step * i;
+      const labelR = radius * ((scores[i] ?? 0) / 5) + 5;
+      const lx = cx + labelR * Math.cos(a);
+      const ly = cy + labelR * Math.sin(a);
+      const align: "left" | "center" | "right" =
+        Math.abs(Math.cos(a)) < 0.15 ? "center" : Math.cos(a) > 0 ? "left" : "right";
+      doc.text((scores[i] ?? 0).toFixed(1), lx, ly + 1, { align });
+    }
   }
 
-  // Axis labels
-  doc.setFontSize(7);
+  // Axis labels (10pt, offset radius+12)
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(50, 50, 50);
   for (let i = 0; i < n; i++) {
     const a = start + step * i;
-    const lr = radius + 8;
+    const lr = radius + 12;
     const lx = cx + lr * Math.cos(a);
     const ly = cy + lr * Math.sin(a);
     const align: "left" | "center" | "right" =
@@ -191,8 +230,8 @@ function renderRadarChart(
     doc.text(lbl, lx, ly + 1, { align });
   }
 
-  // Level numbers along top axis
-  doc.setFontSize(6);
+  // Level numbers along top axis (8pt)
+  doc.setFontSize(8);
   doc.setTextColor(170, 170, 170);
   for (let lv = 1; lv <= 5; lv++) {
     const [lx, ly] = vtx(lv, 0);
@@ -264,14 +303,14 @@ function renderOarScale(
 interface BarItem { label: string; score: number; target: number }
 
 function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarItem[]): number {
-  const labelW = 48;
+  const labelW = 54;
   const barX = x + labelW;
   const barW = w - labelW - 15;
-  const rowH = 9;
-  const barH = 6;
+  const rowH = 11;
+  const barH = 8;
 
   // Vertical grid + scale labels
-  doc.setFontSize(6);
+  doc.setFontSize(8);
   doc.setTextColor(170, 170, 170);
   doc.setDrawColor(235, 235, 235);
   doc.setLineWidth(0.1);
@@ -289,7 +328,7 @@ function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarI
 
     // Label
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
     const lbl = it.label.length > 24 ? it.label.slice(0, 22) + "\u2026" : it.label;
     doc.text(lbl, x, ry + barH / 2 + 1);
@@ -300,7 +339,7 @@ function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarI
     doc.roundedRect(barX, ry + 1, bw, barH - 2, 1, 1, "F");
 
     // Score value at bar end
-    doc.setFontSize(7);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...color);
     doc.text(it.score.toFixed(2), barX + bw + 2, ry + barH / 2 + 1);
@@ -318,7 +357,7 @@ function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarI
   doc.setLineWidth(0.8);
   doc.line(barX, ly, barX + 8, ly);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text("Target level", barX + 10, ly + 1);
   return ly + 6;
@@ -353,11 +392,11 @@ function renderCalloutBox(
   if (items.length === 0) return y;
 
   // Estimate height
-  doc.setFontSize(8.5);
-  let estH = 10;
+  doc.setFontSize(10);
+  let estH = 12;
   for (const item of items) {
     const lines = doc.splitTextToSize(item, w - 14) as string[];
-    estH += lines.length * 3.8 + 1.5;
+    estH += lines.length * 4.2 + 1.5;
   }
   estH += 4;
 
@@ -377,22 +416,22 @@ function renderCalloutBox(
 
   // Title
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(11);
   doc.setTextColor(...color);
-  y += 7;
+  y += 8;
   doc.text(title, x + 7, y);
-  y += 5;
+  y += 6;
 
   // Items
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFontSize(10);
   doc.setTextColor(50, 50, 50);
   for (const item of items) {
     const lines = doc.splitTextToSize(item, w - 14) as string[];
     for (let li = 0; li < lines.length; li++) {
       if (li === 0) doc.text("\u2022", x + 7, y);
       doc.text(lines[li], x + 11, y);
-      y += 3.8;
+      y += 4.2;
     }
     y += 1.5;
   }
@@ -476,25 +515,37 @@ function renderPartDivider(doc: jsPDF, partNumber: number, title: string) {
 
 function renderCoverPage(
   doc: jsPDF, engagement: Engagement, participant: Participant,
-  oar: number | null, bandKey: string | null,
 ) {
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, PAGE_W, PAGE_H, "F");
 
+  // Brand name
   doc.setTextColor(...WHITE);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.text("Synovate", MARGIN_X, 40);
 
-  if (engagement.reportFormat.branding.coBranded && engagement.basics.client) {
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Prepared for ${engagement.basics.client}`, MARGIN_X, 50);
+  // Client name — prominent, below Synovate
+  if (engagement.basics.client) {
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...WHITE);
+    doc.text(engagement.basics.client, MARGIN_X, 52);
+  }
+
+  // Client logo placeholder
+  if (engagement.reportFormat.branding.clientLogoUploaded) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...OCEAN_LIGHT);
+    const logoName = engagement.reportFormat.branding.clientLogoFilename || "client logo";
+    doc.text(`[Logo: ${logoName}]`, MARGIN_X, 62);
   }
 
   const cy = PAGE_H * 0.38;
   doc.setFontSize(14);
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(...WHITE);
   doc.text("Individual Assessment Report", PAGE_W / 2, cy, { align: "center" });
 
   doc.setFontSize(28);
@@ -507,28 +558,8 @@ function renderCoverPage(
   const roleText = [participant.currentRole, participant.businessUnit].filter(Boolean).join(" \u00B7 ");
   doc.text(roleText, PAGE_W / 2, cy + 28, { align: "center" });
 
-  if (oar !== null) {
-    doc.setTextColor(...WHITE);
-    doc.setFontSize(36);
-    doc.setFont("helvetica", "bold");
-    doc.text(oar.toFixed(2), PAGE_W / 2, cy + 50, { align: "center" });
-    if (bandKey) {
-      const bc = BAND_COLOURS[bandKey] ?? OCEAN;
-      const bm = OAR_BAND_META[bandKey as keyof typeof OAR_BAND_META];
-      doc.setFontSize(14);
-      doc.setTextColor(...bc);
-      doc.text(bm.label, PAGE_W / 2, cy + 60, { align: "center" });
-      doc.setFontSize(9);
-      doc.setTextColor(...OCEAN_LIGHT);
-      doc.text(bm.description, PAGE_W / 2, cy + 68, { align: "center" });
-    }
-  } else {
-    doc.setTextColor(...OCEAN_LIGHT);
-    doc.setFontSize(14);
-    doc.text("OAR: N/A", PAGE_W / 2, cy + 50, { align: "center" });
-  }
-
-  const by = PAGE_H - 60;
+  // Metadata block — moved up (no OAR block taking space)
+  const by = PAGE_H - 55;
   doc.setTextColor(...OCEAN_LIGHT);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
@@ -572,9 +603,24 @@ function renderContextPage(doc: jsPDF, engagement: Engagement) {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(50, 50, 50);
   y = renderWrappedText(doc, acContext, MARGIN_X, y, 10, 1.5, CONTENT_W);
-  y += 10;
+  y += 8;
+
+  // Engagement Objectives
+  if (engagement.basics.objective) {
+    y = ensureSpace(doc, 20, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(...NAVY);
+    doc.text("Engagement Objectives", MARGIN_X, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+    y = renderWrappedText(doc, engagement.basics.objective, MARGIN_X, y, 10, 1.5, CONTENT_W);
+    y += 8;
+  }
 
   // Engagement metadata block
+  y = ensureSpace(doc, 60, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...NAVY);
@@ -610,17 +656,32 @@ function renderContextPage(doc: jsPDF, engagement: Engagement) {
     margin: { left: MARGIN_X, right: MARGIN_X },
     showHead: false,
   });
-}
 
-// ─── Part 1: Construct of the Assessment Centre ─────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable?.finalY ?? y + 50;
+  y += 10;
 
-function renderConstructPage(doc: jsPDF, engagement: Engagement) {
-  doc.addPage();
-  let y = MARGIN_TOP;
-
-  // Title
+  // How to Read This Report — guidance box
+  y = ensureSpace(doc, 50, y);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
+  doc.setFontSize(12);
+  doc.setTextColor(...NAVY);
+  doc.text("How to Read This Report", MARGIN_X, y);
+  y += 6;
+
+  const guideItems = [
+    "Part 1 — Background & Context: describes the assessment methodology, competency framework, and engagement parameters.",
+    "Part 2 — Individual Assessment: presents the participant's scores, strengths, evidence, and narrative analysis.",
+    "Part 3 — Development & Next Steps: outlines development recommendations, action planning, and reflection templates.",
+  ];
+  y = renderCalloutBox(doc, MARGIN_X, y, CONTENT_W, "Reading Guide", guideItems, OCEAN);
+  y += 6;
+
+  // ── Construct of the Assessment Centre ──
+
+  y = ensureSpace(doc, 30, y);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
   doc.setTextColor(...NAVY);
   doc.text("Construct of the Assessment Centre", MARGIN_X, y);
   doc.setDrawColor(...OCEAN);
@@ -634,19 +695,20 @@ function renderConstructPage(doc: jsPDF, engagement: Engagement) {
   doc.setTextColor(50, 50, 50);
   y = renderWrappedText(
     doc,
-    "This Assessment Centre employs a multi-trait multi-method (MTMM) design, widely regarded as the gold standard in personnel assessment. Each competency is observed across multiple assessment tools, and each tool surfaces evidence for multiple competencies. This cross-referencing ensures that competency ratings are based on converging evidence from different contexts — reducing method bias and increasing the reliability and validity of outcomes.",
+    "This Assessment Centre employs a multi-trait multi-method (MTMM) design, widely regarded as the gold standard in personnel assessment. Each competency is observed across multiple assessment tools, and each tool surfaces evidence for multiple competencies. This cross-referencing ensures that competency ratings are based on converging evidence from different contexts \u2014 reducing method bias and increasing the reliability and validity of outcomes.",
     MARGIN_X, y, 10, 1.5, CONTENT_W,
   );
   y += 6;
 
   // Tools × Competencies matrix
+  y = ensureSpace(doc, 40, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...NAVY);
   doc.text("Tools \u00D7 Competencies Matrix", MARGIN_X, y);
   y += 6;
 
-  // Build matrix data
+  // Build matrix data with abbreviations
   const compNames: string[] = [];
   const compIds: string[] = [];
   engagement.competencies.forEach((sel) => {
@@ -655,7 +717,16 @@ function renderConstructPage(doc: jsPDF, engagement: Engagement) {
     compIds.push(sel.competencyId);
   });
 
-  const matrixHead = ["Tool", ...compNames.map((n) => n.length > 12 ? n.slice(0, 10) + "\u2026" : n)];
+  // Abbreviate competency names for matrix headers
+  const useCodeLabels = compNames.length > 8;
+  const abbreviations: string[] = compNames.map((name, idx) => {
+    if (useCodeLabels) return `C${idx + 1}`;
+    const firstWord = name.split(/\s+/)[0];
+    if (firstWord.length <= 8) return firstWord;
+    return firstWord.slice(0, 6) + ".";
+  });
+
+  const matrixHead = ["Tool", ...abbreviations];
   const matrixBody: string[][] = [];
 
   for (const tool of engagement.tools) {
@@ -670,15 +741,26 @@ function renderConstructPage(doc: jsPDF, engagement: Engagement) {
     startY: y,
     head: [matrixHead],
     body: matrixBody,
-    styles: { fontSize: 7.5, cellPadding: 2, halign: "center" },
-    headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: "bold", halign: "center" },
-    columnStyles: { 0: { halign: "left", cellWidth: 38, fontStyle: "bold" } },
+    styles: { fontSize: 12, cellPadding: 2, halign: "center" },
+    headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: "bold", halign: "center", fontSize: 10 },
+    columnStyles: { 0: { halign: "left", cellWidth: 30, fontStyle: "bold" } },
     margin: { left: MARGIN_X, right: MARGIN_X },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   y = (doc as any).lastAutoTable?.finalY ?? y + 40;
-  y += 8;
+  y += 4;
+
+  // Numbered legend mapping abbreviations → full names
+  y = ensureSpace(doc, compNames.length * 5 + 8, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  for (let i = 0; i < compNames.length; i++) {
+    doc.text(`${abbreviations[i]} = ${compNames[i]}`, MARGIN_X + 2, y);
+    y += 5;
+  }
+  y += 6;
 
   // Aggregation methodology summary
   y = ensureSpace(doc, 40, y);
@@ -769,24 +851,43 @@ function renderOverviewPage(
     targets.push(tgt?.targetLevel ?? null);
   });
 
+  // Compute group averages
+  const groupAvgs = groupAverageScores(engagement);
+  const groupAvgValues: (number | null)[] = engagement.competencies.map((sel) => {
+    const ga = groupAvgs.find((g) => g.competencyId === sel.competencyId);
+    return ga && ga.average > 0 ? ga.average : null;
+  });
+  const hasGroupAvg = groupAvgValues.some((g) => g !== null) && engagement.participants.length > 1;
+
   // Radar chart (centred, upper area)
   if (labels.length >= 3) {
-    renderRadarChart(doc, PAGE_W / 2, 95, 48, labels, scores, targets);
+    renderRadarChart(doc, PAGE_W / 2, 95, 48, labels, scores, targets, hasGroupAvg ? groupAvgValues : undefined);
   }
 
   // Legend below chart
   let ly = 155;
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   // Target legend swatch
   doc.setFillColor(220, 236, 248);
-  doc.rect(MARGIN_X + 20, ly - 2, 8, 3, "F");
+  doc.rect(MARGIN_X + 10, ly - 2, 8, 3, "F");
   doc.setTextColor(100, 100, 100);
-  doc.text("Target profile", MARGIN_X + 30, ly);
+  doc.text("Target profile", MARGIN_X + 20, ly);
   // Score legend swatch
   doc.setFillColor(130, 185, 215);
-  doc.rect(MARGIN_X + 65, ly - 2, 8, 3, "F");
-  doc.text("Assessed score", MARGIN_X + 75, ly);
+  doc.rect(MARGIN_X + 58, ly - 2, 8, 3, "F");
+  doc.text("Assessed score", MARGIN_X + 68, ly);
+  // Group average legend swatch
+  if (hasGroupAvg) {
+    doc.setDrawColor(180, 100, 30);
+    doc.setLineWidth(0.6);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([2, 1.5], 0);
+    doc.line(MARGIN_X + 110, ly - 0.5, MARGIN_X + 118, ly - 0.5);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([], 0);
+    doc.text("Group average", MARGIN_X + 120, ly);
+  }
 
   // OAR scale bar
   ly += 15;
@@ -1228,16 +1329,15 @@ export function buildIndividualReportDoc(
   const bandKey = oar !== null ? oarBandFor(engagement, oar) : null;
 
   // ── Cover page ──
-  renderCoverPage(doc, engagement, participant, oar, bandKey);
+  renderCoverPage(doc, engagement, participant);
 
   // ── Part 1: Background & Context ──
   renderPartDivider(doc, 1, "Background & Context");
   renderContextPage(doc, engagement);
-  renderNarrativeSection(doc, engagement, participant, "executiveSummary");
-  renderConstructPage(doc, engagement);
 
   // ── Part 2: Individual Assessment ──
   renderPartDivider(doc, 2, "Individual Assessment");
+  renderNarrativeSection(doc, engagement, participant, "executiveSummary");
   renderOverviewPage(doc, engagement, participant, oar, bandKey);
   renderScoreTable(doc, engagement, participant, oar, bandKey);
   renderStrengthsPage(doc, engagement, participant);

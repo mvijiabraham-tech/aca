@@ -133,3 +133,18 @@ export function isCalibrateAvailable(engagement: Engagement): boolean {
 
 // Calibrate-ready threshold — for nudging the user
 export const CALIBRATE_READY_THRESHOLD = 80;
+
+// Group average scores — average of each competency across all participants with scores
+export function groupAverageScores(
+  engagement: Engagement,
+): { competencyId: string; average: number }[] {
+  return engagement.competencies.map((sel) => {
+    const scores = engagement.participants
+      .map((p) => effectiveCompetencyScore(engagement, p.id, sel.competencyId))
+      .filter((s): s is number => s !== null);
+    return {
+      competencyId: sel.competencyId,
+      average: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
+    };
+  });
+}
