@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight, Plus, Trash2, AlertCircle, AlertTriangle,
-  CalendarDays, Clock, Users, MapPin,
+  CalendarDays, Clock, Users, MapPin, Zap, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Field, TextInput, Select } from "@/components/ui/Form";
 import { StepPageHeader } from "@/components/StepPageHeader";
 import { useEngagement, useAppStore } from "@/lib/store";
+import { generateSchedule } from "@/lib/schedule";
+import type { UnscheduledItem } from "@/lib/schedule";
 import type { ScheduleSlot } from "@/types";
 
 interface Conflict {
@@ -58,6 +60,13 @@ export function StepSchedule() {
 
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [view, setView] = useState<"by_day" | "by_assessor">("by_day");
+
+  // Auto-generate state
+  const [genDays, setGenDays] = useState(2);
+  const [genStart, setGenStart] = useState("09:00");
+  const [genEnd, setGenEnd] = useState("17:00");
+  const [genOpen, setGenOpen] = useState(true);
+  const [unscheduledItems, setUnscheduledItems] = useState<UnscheduledItem[]>([]);
 
   const slots = engagement?.schedule ?? [];
   const tools = engagement?.tools ?? [];
@@ -168,6 +177,22 @@ export function StepSchedule() {
     updateSlot(slotId, { [field]: next });
   }
 
+  function handleGenerate() {
+    if (!engagement) return;
+    const result = generateSchedule({
+      days: genDays,
+      startTime: genStart,
+      endTime: genEnd,
+      tools,
+      participants,
+      assessors,
+    });
+    setSchedule(engagement.id, result.slots);
+    setUnscheduledItems(result.unscheduled);
+    setGenOpen(false);
+    setEditingSlotId(null);
+  }
+
   // Group slots by day for the "by_day" view
   const slotsByDay = useMemo(() => {
     const m = new Map<number, ScheduleSlot[]>();
@@ -211,6 +236,72 @@ export function StepSchedule() {
           </div>
         </CardBody>
       </Card>
+
+      {/* Auto-generate card */}
+      <Card>
+        <button
+          onClick={() => setGenOpen(!genOpen)}
+          className="w-full text-left px-4 py-3 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <Zap size={16} className="text-ocean-600" />
+            <span className="text-sm font-semibold text-navy-700">Auto-generate schedule</span>
+          </div>
+          <ChevronDown size={16} className={cn("text-ink-400 transition-transform", genOpen && "rotate-180")} />
+        </button>
+        {genOpen && (
+          <div className="border-t border-ink-200 px-4 py-4 space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Days">
+                <Select value={String(genDays)} onChange={(e) => setGenDays(parseInt(e.target.value, 10))}>
+                  {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>{d}</option>)}
+                </Select>
+              </Field>
+              <Field label="Start time">
+                <TextInput value={genStart} onChange={(e) => setGenStart(e.target.value)} placeholder="09:00" />
+              </Field>
+              <Field label="End time">
+                <TextInput value={genEnd} onChange={(e) => setGenEnd(e.target.value)} placeholder="17:00" />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-2xs text-ink-500">
+                {slots.length > 0 ? "Replaces existing slots" : "Creates a first-draft schedule"}
+              </span>
+              <Button variant="primary" size="sm" onClick={handleGenerate}>
+                <Zap size={13} /> Generate schedule
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Unscheduled items warning */}
+      {unscheduledItems.length > 0 && (
+        <Card className="border-amber-300/60 bg-amber-50/30">
+          <CardBody className="py-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-amber-700">
+                  {unscheduledItems.length} item{unscheduledItems.length === 1 ? "" : "s"} could not be scheduled
+                </div>
+                <div className="text-2xs text-amber-700/80 mt-1 space-y-0.5">
+                  {unscheduledItems.map((u, i) => {
+                    const tool = tools.find((t) => t.id === u.toolId);
+                    const participant = participants.find((p) => p.id === u.participantId);
+                    return (
+                      <div key={i}>
+                        {participant?.name ?? "?"} × {tool?.name ?? "?"} — {u.reason}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Conflict summary if any */}
       {conflicts.length > 0 && (
