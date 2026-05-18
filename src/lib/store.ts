@@ -540,7 +540,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "aca-v05-store",
-      version: 11,
+      version: 12,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 11) {
@@ -550,6 +550,7 @@ export const useAppStore = create<AppState>()(
             customCompetencies: (e as Record<string, unknown>).customCompetencies ?? [],
           }));
         }
+        // v12: acContext added to ReportFormat (optional, no migration needed)
         return state as unknown as AppState;
       },
     },

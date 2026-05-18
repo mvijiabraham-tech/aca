@@ -200,6 +200,7 @@ export interface ReportFormat {
     pptx: boolean;
   };
   customNotes?: string;
+  acContext?: string;
 }
 export const DEFAULT_REPORT_FORMAT: ReportFormat = {
   sections: {

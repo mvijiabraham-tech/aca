@@ -86,14 +86,76 @@ export function ReportIndividual() {
     const def = SECTION_DEFS.find((d) => d.key === key);
     const oar = computedOar(engagement!, activeParticipant.id);
     const band = oar !== null ? oarBandFor(engagement!, oar) : null;
+
+    // Competency profile with scores
     const profile = engagement!.competencies.map((sel) => {
       const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
       const score = effectiveCompetencyScore(engagement!, activeParticipant.id, sel.competencyId);
       const target = engagement!.proficiencyTargets.find((t) => t.competencyId === sel.competencyId);
-      return `- ${c?.name}: ${score?.toFixed(2) ?? "—"} (target L${target?.targetLevel ?? "?"}, weight ${sel.weight}${sel.critical ? ", critical" : ""})`;
+      const gap = score !== null && target ? score - target.targetLevel : null;
+      return `- ${c?.name}: ${score?.toFixed(2) ?? "—"} (target L${target?.targetLevel ?? "?"}, gap ${gap !== null ? (gap >= 0 ? "+" : "") + gap.toFixed(2) : "—"}, weight ${sel.weight}${sel.critical ? ", CRITICAL" : ""})`;
     }).join("\n");
 
-    return `You are writing the "${def?.label}" section of an Assessment Centre report.
+    // Consolidated evidence per competency from all observer scores
+    const evidenceBlocks = engagement!.competencies.map((sel) => {
+      const c = findCompetency(sel.competencyId, engagement?.customCompetencies);
+      const evidence = engagement!.scores
+        .filter((s) => s.participantId === activeParticipant.id)
+        .flatMap((s) => s.competencies.filter((cs) => cs.competencyId === sel.competencyId));
+
+      const wellDone = [...new Set(evidence.map((e) => e.whatWasDoneWell).filter(Boolean))];
+      const couldBeBetter = [...new Set(evidence.map((e) => e.whatCouldBeBetter).filter(Boolean))];
+      const verbatim = [...new Set(evidence.map((e) => e.verbatimObservations).filter(Boolean))];
+      const insights = [...new Set(evidence.map((e) => e.otherNotableInsights).filter(Boolean))];
+
+      let block = `### ${c?.name ?? sel.competencyId}`;
+      if (wellDone.length) block += `\nStrengths observed:\n${wellDone.map((t) => `  - ${t}`).join("\n")}`;
+      if (couldBeBetter.length) block += `\nAreas for improvement:\n${couldBeBetter.map((t) => `  - ${t}`).join("\n")}`;
+      if (verbatim.length) block += `\nVerbatim quotes:\n${verbatim.map((t) => `  - "${t}"`).join("\n")}`;
+      if (insights.length) block += `\nOther insights:\n${insights.map((t) => `  - ${t}`).join("\n")}`;
+      return block;
+    }).join("\n\n");
+
+    // Per-section writing guidance
+    const sectionGuidance: Record<string, string> = {
+      executiveSummary: `Write a 2-3 paragraph executive summary:
+- Open with assessment context (role, engagement, number of competencies assessed)
+- State the OAR score and band with a clear interpretation of role readiness
+- Highlight the top 2 strengths and top 2 development areas with brief evidence references
+- Close with an overall readiness assessment and developmental trajectory
+- Use sub-headings where appropriate`,
+      competencyProfile: `Write a detailed competency-by-competency analysis:
+- 2-3 sentences per competency with specific evidence references
+- Note the gap between score and target for each
+- Group observations by cluster where natural
+- Use precise language that would withstand participant scrutiny
+- Include sub-headings for each competency`,
+      indicatorEvidence: `Write indicator-level evidence for each competency:
+- Reference specific behaviours observed in assessment exercises
+- Distinguish between consistently and partially demonstrated indicators
+- Include verbatim quotes where available, formatted as direct quotes
+- Maintain objectivity while being constructive`,
+      developmentAreas: `Identify 2-3 priority development areas, for each:
+- Explain why it's a priority (link to gap, criticality, or role requirements)
+- Provide SMART-style development recommendations (specific, measurable, time-bound)
+- Suggest concrete activities: stretch assignments, coaching focus, learning resources
+- Frame as growth opportunities, not deficits
+- Use bullet points for recommendations`,
+      nextSteps: `Outline concrete next steps for the next 6-12 months:
+- Feedback session logistics and purpose
+- Individual Development Plan creation with specific commitments
+- Line manager engagement and support structures
+- Follow-up cadence and accountability mechanisms
+- Use bullet points for each action item`,
+      cohortContext: `Provide anonymised cohort context:
+- Position this participant's profile relative to the group
+- Highlight distinctive strengths or patterns
+- Note where the participant sits within the group distribution
+- Maintain strict confidentiality while providing useful comparative context`,
+    };
+
+    return `PERSONA
+You are a senior Assessment Centre lead assessor with 15+ years of experience in executive assessment and talent advisory. You write with the precision and authority of a seasoned industrial-organisational psychologist. Your feedback is evidence-based, constructive, and actionable — never generic or vague. You have personally observed this participant across multiple assessment exercises and have reviewed all observer evidence.
 
 PARTICIPANT
 Name: ${activeParticipant.name}
@@ -106,17 +168,20 @@ Overall: ${oar?.toFixed(2) ?? "—"}  (Band: ${band ? OAR_BAND_META[band].label 
 COMPETENCY PROFILE
 ${profile}
 
-SECTION TO WRITE
-${def?.description}
+EVIDENCE DATA (consolidated from all observers and assessment tools)
+${evidenceBlocks}
 
-INSTRUCTIONS
-- Professional, evidence-based tone
-- 2-3 paragraphs maximum
-- Avoid clichés ("good leader", "team player")
-- Reference specific competencies and scores
-- Write in third person
-- Use British/Indian English spelling
-- Aim for clarity over comprehensiveness`;
+SECTION TO WRITE: "${def?.label}"
+${sectionGuidance[key] ?? def?.description}
+
+STYLE REQUIREMENTS
+- Write as a senior assessor addressing a professional audience (HR leaders, the participant's line manager, and potentially the participant)
+- Third person, British/Indian English spelling throughout
+- Evidence-based: reference specific competencies, scores, and observed behaviours — do not make claims without evidence
+- Precise and actionable — avoid clichés ("good leader", "team player", "strong communicator")
+- Use structured formatting: sub-headings (line ending with ":"), bullet points (lines starting with "- ") where appropriate
+- Tone: authoritative yet developmental — honest about gaps while recognising strengths
+- Aim for clarity and specificity over comprehensiveness`;
   }
 
   async function copyPrompt(key: ReportSectionKey) {
@@ -266,7 +331,14 @@ INSTRUCTIONS
                       size="sm"
                       variant="secondary"
                       disabled={participantSections.filter((s) => s.status === "signed_off").length === 0}
-                      onClick={() => generateIndividualReportPDF(engagement, activeParticipant)}
+                      onClick={() => {
+                        try {
+                          generateIndividualReportPDF(engagement, activeParticipant);
+                        } catch (err) {
+                          console.error("PDF generation failed:", err);
+                          alert(`PDF generation failed: ${err instanceof Error ? err.message : String(err)}`);
+                        }
+                      }}
                     >
                       <Download size={12} /> Download PDF
                     </Button>

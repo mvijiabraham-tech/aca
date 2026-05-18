@@ -181,6 +181,7 @@ export function SetupDashboard() {
                     setCalibrateStage: store.setCalibrateStage,
                     signOffCalibrate: store.signOffCalibrate,
                     upsertReportSection: store.upsertReportSection,
+                    setReportFormat: store.setReportFormat,
                   });
                   setSeedStatus(`Seeded ${result.seededCount} participants`);
                 }}

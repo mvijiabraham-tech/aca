@@ -98,6 +98,22 @@ export function StepReportFormat() {
             </CardBody>
           </Card>
 
+          {/* Assessment context */}
+          <Card>
+            <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30">
+              <h3 className="text-sm font-semibold text-navy-700">Assessment context</h3>
+              <p className="text-2xs text-ink-500 mt-0.5">Introductory paragraph that appears at the start of every participant's report. Use this to describe the purpose and context of the Assessment Centre.</p>
+            </div>
+            <CardBody>
+              <TextArea
+                value={format.acContext ?? ""}
+                onChange={(e) => update({ acContext: e.target.value })}
+                placeholder={`This Assessment Centre was commissioned by ${engagement.basics.client || "[Client]"} as part of a ${engagement.basics.purpose === "selection" ? "selection" : engagement.basics.purpose === "promotion" ? "promotion" : engagement.basics.purpose === "development" ? "development" : "high-potential identification"} process for the ${engagement.basics.audience || "[target audience]"} population. The assessment was designed to evaluate candidates against a set of competencies critical to success in the target role, using a multi-trait multi-method methodology that ensures robust, evidence-based outcomes.`}
+                rows={5}
+              />
+            </CardBody>
+          </Card>
+
           {/* Branding */}
           <Card>
             <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30">

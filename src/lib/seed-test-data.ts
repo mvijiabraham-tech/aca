@@ -189,6 +189,7 @@ function buildReportSections(
   };
 
   const sections: ReportSection[] = [];
+  const fn = name.split(" ")[0]; // first name
 
   // Executive Summary
   sections.push({
@@ -196,15 +197,21 @@ function buildReportSections(
     sectionKey: "executiveSummary",
     content:
       `${name} participated in the Assessment Centre as part of ${engagement.basics.name}, assessed against ${engagement.competencies.length} competencies at the target proficiency levels defined for the ${role} position within ${bu}.\n\n` +
-      `${name} achieved an Overall Assessment Rating (OAR) of ${oarStr}, placing ${name.split(" ")[0]} in the "${band}" band. ` +
+      `${name} achieved an Overall Assessment Rating (OAR) of ${oarStr}, placing ${fn} in the "${band}" band. ` +
       (band === "strong" || band === "distinguished"
-        ? `This is a strong result indicating readiness for the demands of the role, with consistent demonstration of the required competencies across multiple assessment tools. ${name.split(" ")[0]}'s performance was characterised by structured thinking, stakeholder awareness, and the ability to operate effectively under pressure.`
+        ? `This is a strong result indicating readiness for the demands of the role, with consistent demonstration of the required competencies across multiple assessment tools. ${fn}'s performance was characterised by structured thinking, stakeholder awareness, and the ability to operate effectively under pressure.`
         : band === "proficient"
-        ? `This result indicates that ${name.split(" ")[0]} meets the core requirements of the target role, with a balanced profile across competencies. There are targeted areas where further development would strengthen overall effectiveness and prepare ${name.split(" ")[0]} for more complex challenges.`
-        : `This result indicates that ${name.split(" ")[0]} is currently developing toward the requirements of the target role. While foundational capabilities are evident, significant development investment is needed across several competency areas to close the gap to the target profile.`) +
+        ? `This result indicates that ${fn} meets the core requirements of the target role, with a balanced profile across competencies. There are targeted areas where further development would strengthen overall effectiveness and prepare ${fn} for more complex challenges.`
+        : `This result indicates that ${fn} is currently developing toward the requirements of the target role. While foundational capabilities are evident, significant development investment is needed across several competency areas to close the gap to the target profile.`) +
       `\n\n` +
-      (strengths.length > 0 ? `Key strengths were observed in ${strengths.join(", ")}. ` : "") +
-      (devAreas.length > 0 ? `Priority development areas include ${devAreas.join(", ")}. ` : "") +
+      `Key findings:\n\n` +
+      (strengths.length > 0
+        ? `- Strengths observed in ${strengths.join(", ")} — these competencies consistently exceeded the target proficiency level across assessment exercises\n`
+        : "") +
+      (devAreas.length > 0
+        ? `- Priority development areas in ${devAreas.join(", ")} — targeted intervention is recommended to close the gap to the required standard\n`
+        : "") +
+      `- ${fn} was assessed across ${engagement.tools.length} assessment tools by ${engagement.assessors.length} assessors, providing a robust evidence base for the ratings that follow\n\n` +
       `The following sections provide a detailed competency-by-competency analysis with specific behavioural evidence from the assessment exercises.`,
   });
 
@@ -213,7 +220,7 @@ function buildReportSections(
     ...base,
     sectionKey: "competencyProfile",
     content:
-      `The competency profile below summarises ${name.split(" ")[0]}'s performance across all assessed competencies, weighted according to their relative importance for the ${role} position.\n\n` +
+      `The competency profile below summarises ${fn}'s performance across all assessed competencies, weighted according to their relative importance for the ${role} position.\n\n` +
       compLines.join("\n\n"),
   });
 
@@ -251,13 +258,13 @@ function buildReportSections(
     sectionKey: "developmentAreas",
     content:
       (devAreas.length > 0
-        ? `Based on the assessment outcomes, the following competencies represent priority development areas for ${name.split(" ")[0]}: ${devAreas.join(", ")}.\n\n`
-        : `While ${name.split(" ")[0]}'s overall profile is strong, continuous development remains important. The areas below represent opportunities to move from proficiency to mastery.\n\n`) +
-      `Development recommendations:\n\n` +
-      `1. Structured reflection practice: After key meetings or decisions, ${name.split(" ")[0]} should dedicate 10 minutes to capturing what worked, what didn't, and what to adjust next time. This metacognitive habit accelerates skill transfer and self-awareness.\n\n` +
-      `2. Exposure to higher-complexity contexts: Seek stretch assignments or cross-functional projects that require balancing competing stakeholder interests and operating with greater ambiguity. This will develop strategic reasoning and systems thinking.\n\n` +
-      `3. Targeted coaching on executive communication: Work with a coach or mentor on distilling complex analyses into crisp, decision-ready narratives. Focus on the "so what" and "now what" framing that senior leaders expect.\n\n` +
-      `4. Peer learning group: Join or form a small cohort of peers at a similar career stage to share challenges, practice new behaviours in a safe environment, and hold each other accountable for development commitments.`,
+        ? `Based on the assessment outcomes, the following competencies represent priority development areas for ${fn}: ${devAreas.join(", ")}.\n\n`
+        : `While ${fn}'s overall profile is strong, continuous development remains important. The areas below represent opportunities to move from proficiency to mastery.\n\n`) +
+      `Development priorities:\n\n` +
+      `- Structured reflection practice — after key meetings or decisions, ${fn} should dedicate 10 minutes to capturing what worked, what didn't, and what to adjust. Target: daily practice for 90 days. Success measure: self-reported habit formation and observable improvement in subsequent assessment or review settings.\n` +
+      `- Exposure to higher-complexity contexts — seek stretch assignments or cross-functional projects requiring competing stakeholder management and greater ambiguity. Target: one stretch assignment within 60 days. Success measure: line manager feedback on strategic reasoning demonstrated.\n` +
+      `- Targeted coaching on executive communication — work with a coach or mentor on distilling complex analyses into crisp, decision-ready narratives. Focus on "so what" and "now what" framing. Target: 6 coaching sessions over 3 months. Success measure: improved stakeholder feedback on communication clarity.\n` +
+      `- Peer learning cohort — join or form a small group of peers at a similar career stage to share challenges, practise new behaviours, and hold each other accountable. Target: monthly sessions for 6 months. Success measure: sustained engagement and peer feedback on behavioural shifts.`,
   });
 
   // Next Steps
@@ -265,12 +272,13 @@ function buildReportSections(
     ...base,
     sectionKey: "nextSteps",
     content:
-      `The following next steps are recommended for ${name.split(" ")[0]}:\n\n` +
-      `1. Feedback session: A 60-minute one-on-one feedback session will be scheduled with the Lead Assessor to walk through these results in detail, explore ${name.split(" ")[0]}'s self-assessment, and co-create a development plan.\n\n` +
-      `2. Individual Development Plan (IDP): Following the feedback session, ${name.split(" ")[0]} should formalise 2-3 development commitments with specific actions, timelines, and success measures. The IDP will be captured in the Actifyr activation platform.\n\n` +
-      `3. Line manager briefing: With ${name.split(" ")[0]}'s consent, a summary of development themes (not scores) will be shared with the line manager to ensure alignment on support, stretch opportunities, and ongoing coaching.\n\n` +
-      `4. 90-day check-in: A follow-up touchpoint at 90 days post-assessment to review progress against the IDP, celebrate wins, and recalibrate if needed.\n\n` +
-      `5. Cohort debrief: ${name.split(" ")[0]} is encouraged to participate in the optional group debrief session where cohort-level themes (anonymised) are shared, fostering a shared development culture.`,
+      `Immediate actions:\n\n` +
+      `- Feedback session — a 60-minute one-on-one session with the Lead Assessor to walk through results, explore ${fn}'s self-assessment, and co-create a development plan. To be scheduled within 10 working days.\n` +
+      `- Individual Development Plan (IDP) — following the feedback session, ${fn} should formalise 2-3 development commitments with specific actions, timelines, and success measures. The IDP will be captured in the Actifyr activation platform.\n\n` +
+      `Ongoing support:\n\n` +
+      `- Line manager briefing — with ${fn}'s consent, a summary of development themes (not scores) will be shared with the line manager to align on support, stretch opportunities, and coaching.\n` +
+      `- 90-day check-in — a follow-up touchpoint to review IDP progress, celebrate wins, and recalibrate if needed.\n` +
+      `- Cohort debrief — ${fn} is encouraged to attend the optional group session where anonymised cohort-level themes are shared, fostering shared development culture.`,
   });
 
   return sections;
@@ -286,6 +294,7 @@ export interface SeedActions {
   setCalibrateStage: (engagementId: string, stage: "not_started" | "reconcile" | "moderate" | "oar" | "complete") => void;
   signOffCalibrate: (engagementId: string, byObserverId: string) => void;
   upsertReportSection: (engagementId: string, section: ReportSection) => void;
+  setReportFormat: (id: string, format: import("@/types").ReportFormat) => void;
 }
 
 export function seedTestData(engagement: Engagement, actions: SeedActions): { seededCount: number } {
@@ -379,6 +388,12 @@ export function seedTestData(engagement: Engagement, actions: SeedActions): { se
   // 5. Sign off calibrate
   actions.setCalibrateStage(engId, "complete");
   actions.signOffCalibrate(engId, observer.id);
+
+  // 6. Seed AC context paragraph in report format
+  actions.setReportFormat(engId, {
+    ...engagement.reportFormat,
+    acContext: `This Assessment Centre was commissioned by ${engagement.basics.client} as part of a ${engagement.basics.purpose === "selection" ? "selection" : engagement.basics.purpose === "promotion" ? "promotion readiness" : engagement.basics.purpose === "development" ? "development" : "high-potential identification"} process for the ${engagement.basics.audience || "target population"}. The assessment was designed using Synovate's multi-trait multi-method methodology, which combines multiple assessment tools — each measuring overlapping competencies — to produce robust, evidence-based evaluations. This approach ensures that each competency is observed across different contexts and by different assessors, maximising reliability and reducing the influence of any single data point. The results in this report reflect the integrated judgement of a calibrated assessor panel and should be read alongside the individual feedback session.`,
+  });
 
   return { seededCount: participants.length };
 }
