@@ -14,7 +14,7 @@ Every engagement has four sequential destinations, each implemented as a routed 
 
 1. **Setup** — 9 sequential steps configuring the engagement (engagement basics, competencies, proficiency targets, tools, aggregation rules, assessors, participants, schedule, report format). Locking the engagement is the gate that moves it from Draft to Live and unlocks Score.
 
-2. **Score** — Observer scoring of participants on tools. Each observer logs in and is auto-resolved to their assessor record by email. Single integrated screen per participant: each competency card shows evidence textareas at top, indicator rating rows (1-5 + Not Observed) below.
+2. **Score** — Observer scoring of participants on tools. Each observer logs in and is auto-resolved to their assessor record by email. Single integrated screen per participant: each competency card shows verbatim capture & outliers textarea at top, what-did-well / what-can-be-improved below, then indicator rating rows (1-5 + Not Observed). Includes observer calibration flow: personal summary view, multi-observer calibration table with disagreement highlighting, per-observer submission + tool locking when all observers submit.
 
 3. **Calibrate** — Lead Assessor's workspace. Three stages: Reconcile (disagreement heatmap with drill-in), Moderate (per-participant profile review with overrides), Set OAR (5-band picker per participant). Sign-off locks Calibrate and unlocks Report.
 
@@ -41,6 +41,8 @@ src/
 │   ├── ScoreLanding.tsx               # Score destination landing (tools list)
 │   ├── ScoreCockpit.tsx               # Per-tool view (participant list)
 │   ├── ScoreParticipantSheet.tsx      # Per-participant two-pass rating + evidence sheet
+│   ├── ScoreObserverSummary.tsx       # Personal summary: participant × competency matrix
+│   ├── ScoreCalibrationView.tsx       # Multi-observer calibration table with disagreement
 │   ├── CalibrateLanding.tsx           # Calibrate destination landing
 │   ├── CalibrateReconcile.tsx         # Stage 1: disagreement heatmap
 │   ├── CalibrateModerate.tsx          # Stage 2: per-participant moderation
@@ -69,14 +71,14 @@ src/
 
 ## State and store
 
-There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 12) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
+There is one Zustand store at `src/lib/store.ts`. It persists to localStorage under the key `aca-v05-store`. Bump the `version` field (currently 13) whenever the shape of persisted state changes — otherwise old localStorage entries break the app silently on load.
 
 Engagements default to `[]` and are hydrated from Supabase on mount when configured. The store syncs mutations to Supabase via debounced push functions whenever `isSupabaseConfigured` is true. When Supabase is not configured (local dev), the app runs fully offline with localStorage only.
 
 Store actions are organised by destination:
 
 - **Setup**: `updateBasics`, `setCompetencies`, `setProficiencyTargets`, `setTools`, `setAggregation`, `setAssessors`, `setParticipants`, `setSchedule`, `setReportFormat`, `setStepStatus`, `lockEngagement`, `unlockEngagement`
-- **Score**: `setActingObserver`, `upsertScore`, `updateCompetencyScore`, `markScoreComplete`
+- **Score**: `setActingObserver`, `upsertScore`, `updateCompetencyScore`, `markScoreComplete`, `submitToolScores`, `unsubmitToolScores`
 - **Calibrate**: `upsertModeratedScore`, `upsertOar`, `setCalibrateStage`, `signOffCalibrate`
 - **Report**: `upsertReportSection`, `upsertFeedbackSession`, `markEngagementComplete`
 

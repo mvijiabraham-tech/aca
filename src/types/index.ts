@@ -156,6 +156,7 @@ export interface Assessor {
 // --- Step 7: Participants ---
 export interface Participant {
   id: string;
+  userId?: string;                 // System-generated ID e.g. FC001
   name: string;
   employeeId?: string;
   currentRole: string;
@@ -364,8 +365,10 @@ export const RATING_ANCHORS: Record<1 | 2 | 3 | 4 | 5, { short: string; label: s
 export interface CompetencyScore {
   competencyId: string;
   indicators: IndicatorScore[];           // 4 indicators, by position 0-3
+  verbatimAndOutliers?: string;
   whatWasDoneWell?: string;
   whatCouldBeBetter?: string;
+  // Deprecated — kept for backward compat reads during migration
   verbatimObservations?: string;
   otherNotableInsights?: string;
 }
@@ -380,6 +383,7 @@ export interface ParticipantToolScore {
   startedAt?: string;
   lastSavedAt?: string;
   completedAt?: string;                    // marked explicitly by observer
+  submittedAt?: string;                    // observer calibration submission timestamp
 }
 
 // Convenience computed status type

@@ -103,6 +103,20 @@ export function ObserverSheet() {
   const score = findScore(engagement, participantId, toolId, observerId);
   const isComplete = !!score?.completedAt;
 
+  const toolFullyLocked = (() => {
+    const assignedObservers = engagement.assessors.filter((a) => a.assignedToolIds.includes(toolId!));
+    if (assignedObservers.length === 0) return false;
+    return assignedObservers.every((a) => {
+      const participants = engagement.participants.filter((p) => p.toolIds.includes(toolId!));
+      return participants.every((p) => {
+        const s = engagement.scores.find(
+          (sc) => sc.participantId === p.id && sc.toolId === toolId && sc.observerId === a.id,
+        );
+        return !!s?.submittedAt;
+      });
+    });
+  })();
+
   const stableEngagementId = engagement.id;
   const stableObserverId = observerId;
 
@@ -124,7 +138,7 @@ export function ObserverSheet() {
     persistCompetency(cid, { ...current, indicators: newIndicators });
   }
 
-  function setNotes(cid: string, field: "whatWasDoneWell" | "whatCouldBeBetter" | "verbatimObservations" | "otherNotableInsights", value: string) {
+  function setNotes(cid: string, field: "verbatimAndOutliers" | "whatWasDoneWell" | "whatCouldBeBetter", value: string) {
     const current = drafts[cid];
     if (!current) return;
     persistCompetency(cid, { ...current, [field]: value });
@@ -181,6 +195,9 @@ export function ObserverSheet() {
           <h1 className="display-serif text-[1.75rem] leading-[1.1] font-semibold text-navy-700 tracking-tight">
             {participant.name}
           </h1>
+          {participant.userId && (
+            <span className="text-xs font-mono font-semibold text-ocean-700 bg-ocean-50 px-2 py-0.5 rounded">{participant.userId}</span>
+          )}
           {participant.employeeId && (
             <span className="text-sm font-mono text-ink-500">{participant.employeeId}</span>
           )}
@@ -246,7 +263,7 @@ export function ObserverSheet() {
               targetLevelLabel={`L${targetLevel.level} ${targetLevel.name}`}
               indicators={targetLevel.indicators}
               draft={draft}
-              isComplete={isComplete}
+              isComplete={isComplete || toolFullyLocked}
               size="touch"
               onIndicator={(idx, change) => setIndicator(cid, idx, change)}
               onNotes={(field, value) => setNotes(cid, field, value)}

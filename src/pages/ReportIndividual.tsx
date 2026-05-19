@@ -105,14 +105,19 @@ export function ReportIndividual() {
 
       const wellDone = [...new Set(evidence.map((e) => e.whatWasDoneWell).filter(Boolean))];
       const couldBeBetter = [...new Set(evidence.map((e) => e.whatCouldBeBetter).filter(Boolean))];
-      const verbatim = [...new Set(evidence.map((e) => e.verbatimObservations).filter(Boolean))];
-      const insights = [...new Set(evidence.map((e) => e.otherNotableInsights).filter(Boolean))];
+      // New field first, fall back to old fields for backward compat
+      const verbatimAndOutliers = [...new Set(evidence.flatMap((e) => {
+        if (e.verbatimAndOutliers) return [e.verbatimAndOutliers];
+        const parts: string[] = [];
+        if (e.verbatimObservations) parts.push(e.verbatimObservations);
+        if (e.otherNotableInsights) parts.push(e.otherNotableInsights);
+        return parts;
+      }).filter(Boolean))];
 
       let block = `### ${c?.name ?? sel.competencyId}`;
       if (wellDone.length) block += `\nStrengths observed:\n${wellDone.map((t) => `  - ${t}`).join("\n")}`;
       if (couldBeBetter.length) block += `\nAreas for improvement:\n${couldBeBetter.map((t) => `  - ${t}`).join("\n")}`;
-      if (verbatim.length) block += `\nVerbatim quotes:\n${verbatim.map((t) => `  - "${t}"`).join("\n")}`;
-      if (insights.length) block += `\nOther insights:\n${insights.map((t) => `  - ${t}`).join("\n")}`;
+      if (verbatimAndOutliers.length) block += `\nVerbatim & Outliers:\n${verbatimAndOutliers.map((t) => `  - "${t}"`).join("\n")}`;
       return block;
     }).join("\n\n");
 

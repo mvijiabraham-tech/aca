@@ -12,7 +12,7 @@ import { useEngagement, useActingObserverId, useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { subscribeToScores } from "@/lib/sync";
-import { observerTools, observerToolProgress } from "@/lib/scoring";
+import { observerTools, observerToolProgress, isObserverSubmitted, isToolFullySubmitted } from "@/lib/scoring";
 import { findToolType, formatLabel } from "@/mocks/toolLibrary";
 import { findCompetency } from "@/mocks/dictionary";
 
@@ -109,6 +109,8 @@ export function ScoreLanding() {
               const overallStatus =
                 progress.complete === progress.total ? "complete" :
                 progress.complete > 0 || progress.inProgress > 0 ? "in_progress" : "not_started";
+              const toolSubmitted = isObserverSubmitted(engagement, tool.id, observerId!);
+              const toolLocked = isToolFullySubmitted(engagement, tool.id);
 
               return (
                 <Card
@@ -142,19 +144,27 @@ export function ScoreLanding() {
                             {tool.name}
                           </h3>
                         </div>
-                        {overallStatus === "complete" && (
-                          <Badge tone="green">
-                            <CheckCircle2 size={11} /> Complete
-                          </Badge>
-                        )}
-                        {overallStatus === "in_progress" && (
-                          <Badge tone="amber">
-                            <Clock size={11} /> In progress
-                          </Badge>
-                        )}
-                        {overallStatus === "not_started" && (
-                          <Badge tone="neutral">Not started</Badge>
-                        )}
+                        <div className="flex flex-col items-end gap-1">
+                          {toolLocked ? (
+                            <Badge tone="green">
+                              <Lock size={11} /> Locked
+                            </Badge>
+                          ) : toolSubmitted ? (
+                            <Badge tone="ocean">
+                              <CheckCircle2 size={11} /> Submitted
+                            </Badge>
+                          ) : overallStatus === "complete" ? (
+                            <Badge tone="green">
+                              <CheckCircle2 size={11} /> Complete
+                            </Badge>
+                          ) : overallStatus === "in_progress" ? (
+                            <Badge tone="amber">
+                              <Clock size={11} /> In progress
+                            </Badge>
+                          ) : (
+                            <Badge tone="neutral">Not started</Badge>
+                          )}
+                        </div>
                       </div>
 
                       {/* Meta */}

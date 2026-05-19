@@ -93,8 +93,7 @@ interface EvidenceBlock {
   target: number | null;
   wellDone: string[];
   couldBeBetter: string[];
-  verbatim: string[];
-  insights: string[];
+  verbatimAndOutliers: string[];
 }
 
 function collectEvidence(
@@ -106,8 +105,7 @@ function collectEvidence(
 
   const wellDone: string[] = [];
   const couldBeBetter: string[] = [];
-  const verbatim: string[] = [];
-  const insights: string[] = [];
+  const verbatimAndOutliers: string[] = [];
 
   for (const s of engagement.scores) {
     if (s.participantId !== participantId) continue;
@@ -115,8 +113,13 @@ function collectEvidence(
     if (!cs) continue;
     if (cs.whatWasDoneWell) wellDone.push(cs.whatWasDoneWell);
     if (cs.whatCouldBeBetter) couldBeBetter.push(cs.whatCouldBeBetter);
-    if (cs.verbatimObservations) verbatim.push(cs.verbatimObservations);
-    if (cs.otherNotableInsights) insights.push(cs.otherNotableInsights);
+    // New field first, fall back to old fields for backward compat
+    if (cs.verbatimAndOutliers) {
+      verbatimAndOutliers.push(cs.verbatimAndOutliers);
+    } else {
+      if (cs.verbatimObservations) verbatimAndOutliers.push(cs.verbatimObservations);
+      if (cs.otherNotableInsights) verbatimAndOutliers.push(cs.otherNotableInsights);
+    }
   }
 
   return {
@@ -126,8 +129,7 @@ function collectEvidence(
     target: tgt?.targetLevel ?? null,
     wellDone: [...new Set(wellDone)],
     couldBeBetter: [...new Set(couldBeBetter)],
-    verbatim: [...new Set(verbatim)],
-    insights: [...new Set(insights)],
+    verbatimAndOutliers: [...new Set(verbatimAndOutliers)],
   };
 }
 
@@ -1121,7 +1123,7 @@ function renderEvidencePage(doc: jsPDF, engagement: Engagement, participant: Par
 
   for (const sel of engagement.competencies) {
     const ev = collectEvidence(engagement, participant.id, sel.competencyId);
-    const hasContent = ev.wellDone.length + ev.couldBeBetter.length + ev.verbatim.length + ev.insights.length > 0;
+    const hasContent = ev.wellDone.length + ev.couldBeBetter.length + ev.verbatimAndOutliers.length > 0;
     if (!hasContent) continue;
 
     // Competency heading
@@ -1160,29 +1162,15 @@ function renderEvidencePage(doc: jsPDF, engagement: Engagement, participant: Par
       }
     }
 
-    // Verbatim quotes
-    if (ev.verbatim.length > 0) {
+    // Verbatim & outliers
+    if (ev.verbatimAndOutliers.length > 0) {
       y = ensureSpace(doc, 12, y);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(...OCEAN);
-      doc.text("Verbatim observations", MARGIN_X + 3, y);
+      doc.text("Verbatim & Outliers", MARGIN_X + 3, y);
       y += 4;
-      for (const text of ev.verbatim) {
-        y = renderQuoteBlock(doc, MARGIN_X + 3, y, text, CONTENT_W - 6);
-        y += 2;
-      }
-    }
-
-    // Notable insights
-    if (ev.insights.length > 0) {
-      y = ensureSpace(doc, 12, y);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(...NAVY);
-      doc.text("Notable insights", MARGIN_X + 3, y);
-      y += 4;
-      for (const text of ev.insights) {
+      for (const text of ev.verbatimAndOutliers) {
         y = renderQuoteBlock(doc, MARGIN_X + 3, y, text, CONTENT_W - 6);
         y += 2;
       }

@@ -5,7 +5,7 @@ import {
   AlertTriangle, X, Info, Star, Download, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { Card } from "@/components/ui/Card";
+import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Field, TextInput } from "@/components/ui/Form";
@@ -28,6 +28,7 @@ export function StepCompetencies() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCsvHint, setShowCsvHint] = useState(false);
+  const [libraryFilter, setLibraryFilter] = useState<"all" | "synovate" | "custom">("all");
   const [csvMessage, setCsvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -327,42 +328,85 @@ export function StepCompetencies() {
         </Card>
       )}
 
-      {/* Library by cluster */}
-      <div className="space-y-4">
-        <div className="flex items-baseline justify-between">
-          <h3 className="display-serif text-lg font-semibold text-navy-700">Synovate dictionary</h3>
-          <span className="text-2xs text-ink-500 font-medium uppercase tracking-wider">
-            {dictionary.length} competencies · {clusters.length} clusters
-          </span>
-        </div>
-
-        {clusters.map((cluster) => {
-          const competencies = filteredByCluster[cluster.key] ?? [];
-          if (competencies.length === 0) return null;
-          return (
-            <CompetencyClusterCard
-              key={cluster.key}
-              label={cluster.label}
-              description={cluster.description}
-              competencies={competencies}
-              selectedMap={selectedMap}
-              expandedId={expandedId}
-              onToggle={toggleSelection}
-              onExpand={setExpandedId}
-            />
-          );
-        })}
+      {/* Filter tabs */}
+      <div className="flex items-center gap-1 bg-ink-100 rounded-lg p-1">
+        {([
+          { key: "all" as const, label: "All" },
+          { key: "synovate" as const, label: "Synovate Dictionary" },
+          { key: "custom" as const, label: "Custom Framework" },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setLibraryFilter(tab.key)}
+            className={cn(
+              "flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              libraryFilter === tab.key
+                ? "bg-white text-navy-700 shadow-sm"
+                : "text-ink-500 hover:text-navy-700",
+            )}
+          >
+            {tab.label}
+            {tab.key === "custom" && customCompetencies.length > 0 && (
+              <span className="ml-1.5 text-2xs font-mono text-ocean-700">({customCompetencies.length})</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Custom clusters from uploaded competencies */}
-      {customClusterNames.length > 0 && (
+      {/* Synovate dictionary */}
+      {(libraryFilter === "all" || libraryFilter === "synovate") && (
         <div className="space-y-4">
           <div className="flex items-baseline justify-between">
-            <h3 className="display-serif text-lg font-semibold text-navy-700">Custom framework</h3>
+            <h3 className="display-serif text-lg font-semibold text-navy-700">Synovate Dictionary</h3>
             <span className="text-2xs text-ink-500 font-medium uppercase tracking-wider">
-              {customCompetencies.length} competencies · {customClusterNames.length} cluster{customClusterNames.length === 1 ? "" : "s"}
+              {dictionary.length} competencies · {clusters.length} clusters
             </span>
           </div>
+
+          {clusters.map((cluster) => {
+            const competencies = filteredByCluster[cluster.key] ?? [];
+            if (competencies.length === 0) return null;
+            return (
+              <CompetencyClusterCard
+                key={cluster.key}
+                label={cluster.label}
+                description={cluster.description}
+                competencies={competencies}
+                selectedMap={selectedMap}
+                expandedId={expandedId}
+                onToggle={toggleSelection}
+                onExpand={setExpandedId}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Divider between sections when showing all */}
+      {libraryFilter === "all" && customClusterNames.length > 0 && (
+        <div className="relative py-2">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-ink-300" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-white px-4 text-2xs font-semibold text-ink-500 uppercase tracking-wider">
+              Custom Framework
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Custom clusters from uploaded competencies */}
+      {(libraryFilter === "all" || libraryFilter === "custom") && customClusterNames.length > 0 && (
+        <div className="space-y-4">
+          {libraryFilter === "custom" && (
+            <div className="flex items-baseline justify-between">
+              <h3 className="display-serif text-lg font-semibold text-navy-700">Custom Framework</h3>
+              <span className="text-2xs text-ink-500 font-medium uppercase tracking-wider">
+                {customCompetencies.length} competencies · {customClusterNames.length} cluster{customClusterNames.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          )}
 
           {customClusterNames.map((clusterName) => {
             const competencies = customByCluster[clusterName] ?? [];
@@ -382,6 +426,14 @@ export function StepCompetencies() {
             );
           })}
         </div>
+      )}
+
+      {libraryFilter === "custom" && customClusterNames.length === 0 && (
+        <Card>
+          <CardBody className="py-12 text-center text-sm text-ink-500">
+            No custom competencies uploaded yet. Use the CSV upload above to add a custom framework.
+          </CardBody>
+        </Card>
       )}
 
       {/* Helpful warning if too few selected */}
@@ -433,7 +485,7 @@ function CompetencyClusterCard({
   isCustom?: boolean;
 }) {
   return (
-    <Card>
+    <Card className={isCustom ? "border-l-4 border-l-navy-700" : ""}>
       <div className="px-5 py-3 border-b border-ink-200 bg-ink-100/30 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">

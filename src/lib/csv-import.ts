@@ -308,6 +308,7 @@ export function parseParticipantsCSV(
 
     data.push({
       id: `p-${baseTs}${idx}`,
+      userId: "", // store will auto-assign
       name,
       employeeId: row.employee_id?.trim() || undefined,
       currentRole,

@@ -34,6 +34,8 @@ import { ObserverHome } from "@/pages/observer/ObserverHome";
 import { ObserverToolList } from "@/pages/observer/ObserverToolList";
 import { ObserverCockpit } from "@/pages/observer/ObserverCockpit";
 import { ObserverSheet } from "@/pages/observer/ObserverSheet";
+import { ScoreObserverSummary } from "@/pages/ScoreObserverSummary";
+import { ScoreCalibrationView } from "@/pages/ScoreCalibrationView";
 
 function StepRouter() {
   const { stepKey } = useParams<{ stepKey: string }>();
@@ -73,6 +75,8 @@ export function App() {
               <Route path="setup/:stepKey" element={<StepRouter />} />
               <Route path="score" element={<ScoreLanding />} />
               <Route path="score/:toolId" element={<ScoreCockpit />} />
+              <Route path="score/:toolId/summary" element={<ScoreObserverSummary />} />
+              <Route path="score/:toolId/calibrate" element={<ScoreCalibrationView />} />
               <Route path="score/:toolId/:participantId" element={<ScoreParticipantSheet />} />
               <Route path="calibrate" element={<CalibrateLanding />} />
               <Route path="calibrate/reconcile" element={<CalibrateReconcile />} />
@@ -89,6 +93,8 @@ export function App() {
             <Route path="/observe/:engagementId" element={<ObserverShell />}>
               <Route index element={<ObserverToolList />} />
               <Route path=":toolId" element={<ObserverCockpit />} />
+              <Route path=":toolId/summary" element={<ScoreObserverSummary />} />
+              <Route path=":toolId/calibrate" element={<ScoreCalibrationView />} />
               <Route path=":toolId/:participantId" element={<ObserverSheet />} />
             </Route>
           </Route>

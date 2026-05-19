@@ -1,7 +1,8 @@
 import type {
   ParticipantToolScore, ScoringStatus, EngagementTool, Participant,
-  Engagement, Assessor,
+  Engagement, Assessor, CompetencyScore,
 } from "@/types";
+import { competencyScoreFromIndicators } from "@/lib/calibrate";
 
 /**
  * Compute scoring status for a single (participant, tool, observer) tuple.
@@ -117,4 +118,145 @@ export function findScore(
  */
 export function getDefaultObserver(engagement: Engagement): Assessor | undefined {
   return engagement.assessors.find((a) => a.role === "lead") ?? engagement.assessors[0];
+}
+
+// =============================================================================
+// PARTICIPANT USER ID GENERATION
+// =============================================================================
+
+/**
+ * Generate a sequential userId from the engagement code.
+ * Prefix = first 2 alpha chars of engagement code (e.g., "FC" from "FC-2026").
+ * Suffix = 3-digit zero-padded number, sequential from existing participants.
+ */
+export function generateUserId(engagementCode: string, existingParticipants: Participant[]): string {
+  const prefix = engagementCode.replace(/[^a-zA-Z]/g, "").substring(0, 2).toUpperCase() || "XX";
+  let maxNum = 0;
+  for (const p of existingParticipants) {
+    if (p.userId?.startsWith(prefix)) {
+      const num = parseInt(p.userId.slice(prefix.length), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  }
+  return `${prefix}${String(maxNum + 1).padStart(3, "0")}`;
+}
+
+/**
+ * Assign userIds to participants that are missing them.
+ * Processes sequentially to avoid duplicates within a batch.
+ */
+export function assignMissingUserIds(engagementCode: string, participants: Participant[]): Participant[] {
+  const result = [...participants];
+  for (let i = 0; i < result.length; i++) {
+    if (!result[i].userId) {
+      result[i] = { ...result[i], userId: generateUserId(engagementCode, result.slice(0, i)) };
+    }
+  }
+  return result;
+}
+
+// =============================================================================
+// OBSERVER SUBMISSION & LOCKING (R2)
+// =============================================================================
+
+/**
+ * Check if a single score has been submitted.
+ */
+export function isScoreSubmitted(score: ParticipantToolScore | undefined): boolean {
+  return !!score?.submittedAt;
+}
+
+/**
+ * Check if an observer has submitted all scores for a tool.
+ */
+export function isObserverSubmitted(engagement: Engagement, toolId: string, observerId: string): boolean {
+  const participants = observerToolParticipants(engagement, observerId, toolId);
+  if (participants.length === 0) return false;
+  return participants.every((p) => {
+    const score = findScore(engagement, p.id, toolId, observerId);
+    return !!score?.submittedAt;
+  });
+}
+
+/**
+ * Check if ALL assigned observers have submitted for a tool (tool fully locked).
+ */
+export function isToolFullySubmitted(engagement: Engagement, toolId: string): boolean {
+  const tool = engagement.tools.find((t) => t.id === toolId);
+  if (!tool) return false;
+  const assignedObservers = engagement.assessors.filter((a) => a.assignedToolIds.includes(toolId));
+  if (assignedObservers.length === 0) return false;
+  return assignedObservers.every((a) => isObserverSubmitted(engagement, toolId, a.id));
+}
+
+/**
+ * Per-observer submission status for a tool.
+ */
+export function toolObserverSubmissionStatus(
+  engagement: Engagement,
+  toolId: string,
+): { observerId: string; observerName: string; submitted: boolean }[] {
+  const tool = engagement.tools.find((t) => t.id === toolId);
+  if (!tool) return [];
+  return engagement.assessors
+    .filter((a) => a.assignedToolIds.includes(toolId))
+    .map((a) => ({
+      observerId: a.id,
+      observerName: a.name,
+      submitted: isObserverSubmitted(engagement, toolId, a.id),
+    }));
+}
+
+/**
+ * Build a calibration matrix: participants × competencies × observers.
+ * Each cell = the observer's average score for that competency on that participant.
+ */
+export interface CalibrationCell {
+  observerId: string;
+  observerName: string;
+  score: number | null;
+}
+
+export interface CalibrationRow {
+  participantId: string;
+  participantName: string;
+  competencies: {
+    competencyId: string;
+    competencyName: string;
+    cells: CalibrationCell[];
+    average: number | null;
+  }[];
+}
+
+export function calibrationMatrix(
+  engagement: Engagement,
+  toolId: string,
+): CalibrationRow[] {
+  const tool = engagement.tools.find((t) => t.id === toolId);
+  if (!tool) return [];
+
+  const assignedObservers = engagement.assessors.filter((a) => a.assignedToolIds.includes(toolId));
+  const participants = engagement.participants.filter((p) => p.toolIds.includes(toolId));
+
+  return participants.map((p) => ({
+    participantId: p.id,
+    participantName: p.name,
+    competencies: tool.competencyIds.map((cid) => {
+      const cells: CalibrationCell[] = assignedObservers.map((obs) => {
+        const score = findScore(engagement, p.id, toolId, obs.id);
+        const compScore = score?.competencies.find((cs: CompetencyScore) => cs.competencyId === cid);
+        const avg = compScore ? competencyScoreFromIndicators(compScore.indicators) : null;
+        return { observerId: obs.id, observerName: obs.name, score: avg };
+      });
+      const validScores = cells.map((c) => c.score).filter((s): s is number => s !== null);
+      const average = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : null;
+
+      return {
+        competencyId: cid,
+        competencyName: cid, // will be resolved in UI via findCompetency
+        cells,
+        average,
+      };
+    }),
+  }));
 }

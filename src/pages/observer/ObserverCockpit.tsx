@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   ChevronLeft, ArrowRight, CheckCircle2, Clock, Circle,
-  Building, Download, AlertCircle,
+  Building, Download, AlertCircle, Search,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -67,11 +68,19 @@ export function ObserverCockpit() {
   }
 
   const toolType = findToolType(tool.toolTypeKey);
-  const participants = observerToolParticipants(engagement, observerId, toolId);
+  const allParticipants = observerToolParticipants(engagement, observerId, toolId);
   const competencies = tool.competencyIds.map((id) => findCompetency(id, engagement?.customCompetencies)).filter(Boolean);
   const totalIndicators = expectedIndicators(tool);
+  const [search, setSearch] = useState("");
 
-  const completeCount = participants.filter((p) => {
+  const participants = search
+    ? allParticipants.filter((p) => {
+        const q = search.toLowerCase();
+        return p.name.toLowerCase().includes(q) || (p.userId?.toLowerCase().includes(q));
+      })
+    : allParticipants;
+
+  const completeCount = allParticipants.filter((p) => {
     const s = findScore(engagement, p.id, toolId, observerId);
     return computeScoringStatus(s) === "complete";
   }).length;
@@ -137,19 +146,19 @@ export function ObserverCockpit() {
             Scoring progress
           </div>
           <div className="text-sm font-semibold text-navy-700 mt-0.5">
-            {completeCount} of {participants.length} participants complete
+            {completeCount} of {allParticipants.length} participants complete
           </div>
         </div>
         <div className="w-48">
           <div className="h-2 bg-ink-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-500 rounded-full transition-all"
-              style={{ width: participants.length === 0 ? "0%" : `${(completeCount / participants.length) * 100}%` }}
+              style={{ width: allParticipants.length === 0 ? "0%" : `${(completeCount / allParticipants.length) * 100}%` }}
             />
           </div>
         </div>
         <div className="font-mono text-xl font-semibold text-navy-700">
-          {participants.length === 0 ? 0 : Math.round((completeCount / participants.length) * 100)}
+          {allParticipants.length === 0 ? 0 : Math.round((completeCount / allParticipants.length) * 100)}
           <span className="text-base text-ink-500">%</span>
         </div>
       </div>
@@ -166,9 +175,21 @@ export function ObserverCockpit() {
 
       {/* Participant list */}
       <div>
-        <h2 className="display-serif text-xl font-semibold text-navy-700 mb-3">
-          Participants
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="display-serif text-xl font-semibold text-navy-700">
+            Participants
+          </h2>
+          <div className="relative w-64">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or ID…"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400"
+            />
+          </div>
+        </div>
         <div className="space-y-2">
           {participants.map((p) => {
             const score = findScore(engagement, p.id, toolId, observerId);
@@ -201,6 +222,9 @@ export function ObserverCockpit() {
                         <span className="text-sm font-semibold text-navy-700 truncate">
                           {p.name}
                         </span>
+                        {p.userId && (
+                          <Badge tone="ocean">{p.userId}</Badge>
+                        )}
                         {p.employeeId && (
                           <span className="text-2xs font-mono text-ink-500">
                             {p.employeeId}

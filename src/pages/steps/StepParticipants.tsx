@@ -55,6 +55,7 @@ export function StepParticipants() {
     if (!engagement) return;
     const newP: Participant = {
       id: `p-${Date.now().toString(36)}`,
+      userId: "", // store will auto-assign
       name: "",
       currentRole: engagement.basics.audience.split("—")[0]?.trim() ?? "",
       // Default-map to all engagement tools
@@ -230,6 +231,7 @@ export function StepParticipants() {
                     <h3 className="text-sm font-semibold text-navy-700 truncate">
                       {p.name || <span className="text-ink-400">Unnamed participant</span>}
                     </h3>
+                    {p.userId && <Badge tone="ocean">{p.userId}</Badge>}
                     {p.employeeId && <Badge tone="neutral">{p.employeeId}</Badge>}
                     {!isFullyMapped && <Badge tone="amber">{p.toolIds.length}/{tools.length} tools</Badge>}
                   </div>
@@ -251,6 +253,11 @@ export function StepParticipants() {
                         onChange={(e) => updateParticipant(p.id, { name: e.target.value })}
                         placeholder="e.g. Ankit Sharma"
                       />
+                    </Field>
+                    <Field label="User ID" hint="Auto-generated">
+                      <div className="flex items-center h-9 px-3 bg-ink-100/50 border border-ink-200 rounded-md text-sm font-mono text-navy-700">
+                        {p.userId || <span className="text-ink-400">Pending save</span>}
+                      </div>
                     </Field>
                     <Field label="Employee ID">
                       <TextInput

@@ -23,7 +23,7 @@ export interface CompetencyScoreCardProps {
   isComplete: boolean;
   size?: "default" | "touch";
   onIndicator: (idx: number, change: Partial<IndicatorScore>) => void;
-  onNotes: (field: "whatWasDoneWell" | "whatCouldBeBetter" | "verbatimObservations" | "otherNotableInsights", value: string) => void;
+  onNotes: (field: "verbatimAndOutliers" | "whatWasDoneWell" | "whatCouldBeBetter", value: string) => void;
 }
 
 export function CompetencyScoreCard({
@@ -58,11 +58,29 @@ export function CompetencyScoreCard({
       <CardBody className="space-y-4">
         <p className="text-xs text-ink-500 leading-relaxed">{definition}</p>
 
-        {/* Evidence notes */}
+        {/* Verbatim & outliers — full width */}
+        <div>
+          <label className="text-2xs uppercase tracking-wider font-semibold text-navy-700 block mb-1.5">
+            Verbatim capture & outliers
+          </label>
+          <textarea
+            value={draft.verbatimAndOutliers ?? ""}
+            onChange={(e) => onNotes("verbatimAndOutliers", e.target.value)}
+            disabled={isComplete}
+            placeholder="Notable quotes, word-for-word narrations, and outlier observations."
+            rows={textareaRows}
+            className={cn(
+              "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",
+              textareaClass,
+            )}
+          />
+        </div>
+
+        {/* Evidence notes — 2 column */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-2xs uppercase tracking-wider font-semibold text-green-700 block mb-1.5">
-              What was done well
+              What did the person do well
             </label>
             <textarea
               value={draft.whatWasDoneWell ?? ""}
@@ -78,51 +96,13 @@ export function CompetencyScoreCard({
           </div>
           <div>
             <label className="text-2xs uppercase tracking-wider font-semibold text-amber-700 block mb-1.5">
-              What could have been better
+              What can be improved
             </label>
             <textarea
               value={draft.whatCouldBeBetter ?? ""}
               onChange={(e) => onNotes("whatCouldBeBetter", e.target.value)}
               disabled={isComplete}
               placeholder="Gaps, development areas, or moments to probe further."
-              rows={textareaRows}
-              className={cn(
-                "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",
-                textareaClass,
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Optional observation fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-2xs uppercase tracking-wider font-semibold text-navy-700 block mb-1.5">
-              Verbatim observations
-              <span className="font-normal text-ink-400 ml-1">(optional)</span>
-            </label>
-            <textarea
-              value={draft.verbatimObservations ?? ""}
-              onChange={(e) => onNotes("verbatimObservations", e.target.value)}
-              disabled={isComplete}
-              placeholder="Notable quotes or narrations captured word-for-word."
-              rows={textareaRows}
-              className={cn(
-                "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",
-                textareaClass,
-              )}
-            />
-          </div>
-          <div>
-            <label className="text-2xs uppercase tracking-wider font-semibold text-navy-700 block mb-1.5">
-              Other notable insights
-              <span className="font-normal text-ink-400 ml-1">(optional)</span>
-            </label>
-            <textarea
-              value={draft.otherNotableInsights ?? ""}
-              onChange={(e) => onNotes("otherNotableInsights", e.target.value)}
-              disabled={isComplete}
-              placeholder="Outlier observations not directly tied to this competency."
               rows={textareaRows}
               className={cn(
                 "w-full px-3 py-2 border border-ink-200 rounded-md focus:outline-none focus:ring-2 focus:ring-ocean-600/20 focus:border-ocean-400 transition-colors resize-none disabled:bg-ink-100/40",

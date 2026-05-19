@@ -10,6 +10,7 @@ import type {
 } from "@/types";
 import { DEFAULT_AGGREGATION, DEFAULT_REPORT_FORMAT, EMPTY_CALIBRATE_STATE, EMPTY_REPORT_STATE } from "@/types";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { assignMissingUserIds } from "@/lib/scoring";
 import {
   debouncedPushEngagement,
   debouncedPushEngagementMeta,
@@ -54,6 +55,9 @@ interface AppState {
     observerId: string,
     complete: boolean,
   ) => void;
+  // Observer calibration — submit/unsubmit
+  submitToolScores: (engagementId: string, toolId: string, observerId: string) => void;
+  unsubmitToolScores: (engagementId: string, toolId: string, observerId: string) => void;
   // Pass 5 — Calibrate
   upsertModeratedScore: (engagementId: string, score: ModeratedScore) => void;
   upsertOar: (engagementId: string, oar: ParticipantOar) => void;
@@ -242,7 +246,10 @@ export const useAppStore = create<AppState>()(
 
       setParticipants: (id, participants) => {
         set((s) => ({
-          engagements: patchEngagement(s.engagements, id, (e) => ({ ...e, participants })),
+          engagements: patchEngagement(s.engagements, id, (e) => {
+            const withIds = assignMissingUserIds(e.basics.code, participants);
+            return { ...e, participants: withIds };
+          }),
         }));
         if (shouldSync()) {
           const eng = getEngagement(get().engagements, id);
@@ -389,6 +396,42 @@ export const useAppStore = create<AppState>()(
             const score = eng.scores.find((sc) => sc.id === scoreId);
             if (score) debouncedPushScore(engagementId, score);
           }
+        }
+      },
+
+      // Observer calibration — submit/unsubmit
+      submitToolScores: (engagementId, toolId, observerId) => {
+        const now = new Date().toISOString();
+        set((s) => ({
+          engagements: patchEngagement(s.engagements, engagementId, (e) => ({
+            ...e,
+            scores: e.scores.map((sc) =>
+              sc.toolId === toolId && sc.observerId === observerId
+                ? { ...sc, submittedAt: now }
+                : sc,
+            ),
+          })),
+        }));
+        if (shouldSync()) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagement(eng);
+        }
+      },
+
+      unsubmitToolScores: (engagementId, toolId, observerId) => {
+        set((s) => ({
+          engagements: patchEngagement(s.engagements, engagementId, (e) => ({
+            ...e,
+            scores: e.scores.map((sc) =>
+              sc.toolId === toolId && sc.observerId === observerId
+                ? { ...sc, submittedAt: undefined }
+                : sc,
+            ),
+          })),
+        }));
+        if (shouldSync()) {
+          const eng = getEngagement(get().engagements, engagementId);
+          if (eng) debouncedPushEngagement(eng);
         }
       },
 
@@ -540,7 +583,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "aca-v05-store",
-      version: 12,
+      version: 13,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 11) {
@@ -551,6 +594,46 @@ export const useAppStore = create<AppState>()(
           }));
         }
         // v12: acContext added to ReportFormat (optional, no migration needed)
+        if (version < 13) {
+          const engagements = (state.engagements ?? []) as Record<string, unknown>[];
+          state.engagements = engagements.map((e) => {
+            const eng = e as Record<string, unknown>;
+            // Migrate CompetencyScore: merge verbatimObservations + otherNotableInsights → verbatimAndOutliers
+            const scores = ((eng.scores ?? []) as Record<string, unknown>[]).map((s) => {
+              const sc = s as Record<string, unknown>;
+              const competencies = ((sc.competencies ?? []) as Record<string, unknown>[]).map((cs) => {
+                const c = cs as Record<string, unknown>;
+                if (!c.verbatimAndOutliers && (c.verbatimObservations || c.otherNotableInsights)) {
+                  const parts = [c.verbatimObservations, c.otherNotableInsights].filter(Boolean);
+                  c.verbatimAndOutliers = parts.join("\n\n");
+                }
+                return c;
+              });
+              return { ...sc, competencies };
+            });
+            // Backfill userId for existing participants
+            const participants = ((eng.participants ?? []) as Record<string, unknown>[]);
+            const code = ((eng.basics as Record<string, unknown>)?.code as string) ?? "";
+            const prefix = code.replace(/[^a-zA-Z]/g, "").substring(0, 2).toUpperCase() || "XX";
+            let counter = 0;
+            const patchedParticipants = participants.map((p) => {
+              const part = p as Record<string, unknown>;
+              if (!part.userId) {
+                counter++;
+                part.userId = `${prefix}${String(counter).padStart(3, "0")}`;
+              } else {
+                // Track existing counters
+                const uid = part.userId as string;
+                if (uid.startsWith(prefix)) {
+                  const num = parseInt(uid.slice(prefix.length), 10);
+                  if (!isNaN(num) && num > counter) counter = num;
+                }
+              }
+              return part;
+            });
+            return { ...eng, scores, participants: patchedParticipants };
+          });
+        }
         return state as unknown as AppState;
       },
     },

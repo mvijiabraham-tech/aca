@@ -55,10 +55,9 @@ function makeCompScore(cid: string, ratings: number[], wellDone: string, better:
   return {
     competencyId: cid,
     indicators: makeIndicators(ratings),
+    verbatimAndOutliers: `"Key observation for ${cid}" — notable behaviour demonstrated during the exercise.\n\nShowed consistent pattern in ${cid} across multiple contexts.`,
     whatWasDoneWell: wellDone,
     whatCouldBeBetter: better,
-    verbatimObservations: `"Key observation for ${cid}" — notable behaviour demonstrated during the exercise.`,
-    otherNotableInsights: `Showed consistent pattern in ${cid} across multiple contexts.`,
   };
 }
 

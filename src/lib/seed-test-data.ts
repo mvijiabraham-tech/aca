@@ -113,10 +113,9 @@ function buildScores(
       const cs: CompetencyScore = {
         competencyId: cid,
         indicators,
+        verbatimAndOutliers: [pick(verbatim, compIdx), pick(insights, compIdx)].filter(Boolean).join("\n\n"),
         whatWasDoneWell: pick(wellDone, compIdx),
         whatCouldBeBetter: pick(better, compIdx),
-        verbatimObservations: pick(verbatim, compIdx),
-        otherNotableInsights: pick(insights, compIdx),
       };
       compIdx++;
       return cs;
