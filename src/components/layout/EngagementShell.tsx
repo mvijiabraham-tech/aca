@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import {
   Settings, ClipboardEdit, Scale, FileText,
   ArrowLeft, ChevronDown,
@@ -7,6 +8,8 @@ import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
 import { AdminBadge } from "./Brand";
 import { useEngagement, useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
+import type { Engagement, AssessorRole } from "@/types";
 
 type Destination = {
   key: string;
@@ -22,11 +25,33 @@ const destinations: Destination[] = [
   { key: "report",    label: "Report",    subtitle: "Deliver",     icon: FileText },
 ];
 
+function getAssessorRole(engagement: Engagement, email: string | undefined): AssessorRole | null {
+  if (!email) return null;
+  const match = engagement.assessors.find(
+    (a) => a.email.toLowerCase() === email.toLowerCase(),
+  );
+  return match?.role ?? null;
+}
+
 export function EngagementShell() {
   const { engagementId } = useParams<{ engagementId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const engagement = useEngagement(engagementId);
   const totalEngagements = useAppStore((s) => s.engagements.length);
+  const { profile } = useAuth();
+
+  const role = engagement ? getAssessorRole(engagement, profile?.email) : null;
+  const isObserver = role === "observer";
+
+  // Route guard: redirect observers away from non-score destinations
+  useEffect(() => {
+    if (!engagement || !isObserver) return;
+    const scorePath = `/engagement/${engagement.id}/score`;
+    if (!location.pathname.startsWith(scorePath)) {
+      navigate(scorePath, { replace: true });
+    }
+  }, [engagement, isObserver, location.pathname, navigate]);
 
   // Defensive — if engagement isn't found, bounce back to landing
   if (!engagement) {
@@ -48,6 +73,9 @@ export function EngagementShell() {
 
   const completedSteps = engagement.setupSteps.filter((s) => s.status === "complete").length;
   const totalSteps = engagement.setupSteps.length;
+  const visibleDestinations = isObserver
+    ? destinations.filter((d) => d.key === "score")
+    : destinations;
 
   return (
     <div className="min-h-screen flex flex-col surface-canvas">
@@ -57,16 +85,20 @@ export function EngagementShell() {
           {/* Top row: back link + engagement identity + admin */}
           <div className="flex items-center justify-between h-14 border-b border-ink-100">
             <div className="flex items-center gap-5 min-w-0 flex-1">
-              <button
-                onClick={() => navigate("/")}
-                className="flex items-center gap-1.5 text-2xs font-medium text-ink-500 hover:text-navy-700 transition-colors whitespace-nowrap"
-              >
-                <ArrowLeft size={13} />
-                All engagements
-                <span className="text-ink-400 ml-1">({totalEngagements})</span>
-              </button>
+              {!isObserver && (
+                <>
+                  <button
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-1.5 text-2xs font-medium text-ink-500 hover:text-navy-700 transition-colors whitespace-nowrap"
+                  >
+                    <ArrowLeft size={13} />
+                    All engagements
+                    <span className="text-ink-400 ml-1">({totalEngagements})</span>
+                  </button>
 
-              <div className="h-5 w-px bg-ink-200 flex-shrink-0" />
+                  <div className="h-5 w-px bg-ink-200 flex-shrink-0" />
+                </>
+              )}
 
               <div className="min-w-0 flex items-center gap-3">
                 <div className="min-w-0">
@@ -88,7 +120,7 @@ export function EngagementShell() {
                         <span>{engagement.basics.cohortSize} participants</span>
                       </>
                     )}
-                    {engagement.status === "draft" && (
+                    {!isObserver && engagement.status === "draft" && (
                       <>
                         <span className="text-ink-300">·</span>
                         <span>Setup {completedSteps}/{totalSteps}</span>
@@ -96,13 +128,15 @@ export function EngagementShell() {
                     )}
                   </div>
                 </div>
-                <button
-                  className="text-ink-400 hover:text-ink-700 p-1 rounded hover:bg-ink-100 transition-colors"
-                  title="Switch engagement"
-                  onClick={() => navigate("/")}
-                >
-                  <ChevronDown size={14} />
-                </button>
+                {!isObserver && (
+                  <button
+                    className="text-ink-400 hover:text-ink-700 p-1 rounded hover:bg-ink-100 transition-colors"
+                    title="Switch engagement"
+                    onClick={() => navigate("/")}
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -111,7 +145,7 @@ export function EngagementShell() {
 
           {/* Destination tabs */}
           <nav className="flex items-center -mb-px">
-            {destinations.map((d) => {
+            {visibleDestinations.map((d) => {
               const Icon = d.icon;
               const locked = isDestinationLocked(d.key, engagement.status);
               return (
