@@ -300,7 +300,9 @@ function renderOarScale(
 
 // ─── Chart: Horizontal bar chart ────────────────────────────────────────────
 
-interface BarItem { label: string; score: number; target: number }
+interface BarItem { label: string; score: number; target: number; groupAvg?: number | null }
+
+const BROWN: readonly [number, number, number] = [180, 100, 30];
 
 function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarItem[]): number {
   const labelW = 54;
@@ -308,6 +310,7 @@ function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarI
   const barW = w - labelW - 15;
   const rowH = 11;
   const barH = 8;
+  const hasGroupAvg = items.some((it) => it.groupAvg != null);
 
   // Vertical grid + scale labels
   doc.setFontSize(8);
@@ -349,17 +352,43 @@ function renderBarChart(doc: jsPDF, x: number, y: number, w: number, items: BarI
     doc.setDrawColor(...NAVY);
     doc.setLineWidth(0.8);
     doc.line(tx, ry, tx, ry + barH);
+
+    // Group average marker (brown/orange dashed)
+    if (it.groupAvg != null) {
+      const gx = barX + (it.groupAvg / 5) * barW;
+      doc.setDrawColor(...BROWN);
+      doc.setLineWidth(0.6);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (doc as any).setLineDashPattern([1.5, 1], 0);
+      doc.line(gx, ry, gx, ry + barH);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (doc as any).setLineDashPattern([], 0);
+    }
   }
 
   // Legend
   const ly = y + items.length * rowH + 4;
+  let legendX = barX;
+  // Target
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(0.8);
-  doc.line(barX, ly, barX + 8, ly);
+  doc.line(legendX, ly, legendX + 8, ly);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text("Target level", barX + 10, ly + 1);
+  doc.text("Target level", legendX + 10, ly + 1);
+  legendX += 55;
+  // Group average
+  if (hasGroupAvg) {
+    doc.setDrawColor(...BROWN);
+    doc.setLineWidth(0.6);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([1.5, 1], 0);
+    doc.line(legendX, ly, legendX + 8, ly);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setLineDashPattern([], 0);
+    doc.text("Group average", legendX + 10, ly + 1);
+  }
   return ly + 6;
 }
 
@@ -542,21 +571,28 @@ function renderCoverPage(
     doc.text(`[Logo: ${logoName}]`, MARGIN_X, 62);
   }
 
+  // Accent line separating brand from content
+  doc.setDrawColor(...OCEAN);
+  doc.setLineWidth(0.8);
+  const accentY = engagement.reportFormat.branding.clientLogoUploaded ? 70 : (engagement.basics.client ? 60 : 48);
+  doc.line(MARGIN_X, accentY, MARGIN_X + 40, accentY);
+
   const cy = PAGE_H * 0.38;
   doc.setFontSize(14);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...WHITE);
-  doc.text("Individual Assessment Report", PAGE_W / 2, cy, { align: "center" });
+  doc.setTextColor(...OCEAN_LIGHT);
+  doc.text("Individual Assessment Report", PAGE_W / 2, cy - 4, { align: "center" });
 
-  doc.setFontSize(28);
+  doc.setFontSize(30);
   doc.setFont("helvetica", "bold");
-  doc.text(participant.name, PAGE_W / 2, cy + 16, { align: "center" });
+  doc.setTextColor(...WHITE);
+  doc.text(participant.name, PAGE_W / 2, cy + 14, { align: "center" });
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...OCEAN_LIGHT);
   const roleText = [participant.currentRole, participant.businessUnit].filter(Boolean).join(" \u00B7 ");
-  doc.text(roleText, PAGE_W / 2, cy + 28, { align: "center" });
+  if (roleText) doc.text(roleText, PAGE_W / 2, cy + 26, { align: "center" });
 
   // Metadata block — moved up (no OAR block taking space)
   const by = PAGE_H - 55;
@@ -808,14 +844,14 @@ function renderContextPage(doc: jsPDF, engagement: Engagement) {
   const assessors = engagement.assessors.filter((a) => a.role === "assessor");
   const observers = engagement.assessors.filter((a) => a.role === "observer");
   const panelParts: string[] = [];
-  if (leads.length > 0) panelParts.push(`${leads.length} Lead Assessor${leads.length > 1 ? "s" : ""}`);
+  if (leads.length > 0) panelParts.push(`${leads.length} AC Assessor${leads.length > 1 ? "s" : ""}`);
   if (assessors.length > 0) panelParts.push(`${assessors.length} Assessor${assessors.length > 1 ? "s" : ""}`);
   if (observers.length > 0) panelParts.push(`${observers.length} Observer${observers.length > 1 ? "s" : ""}`);
 
   const panelText =
     `The assessment panel comprised ${engagement.assessors.length} member${engagement.assessors.length !== 1 ? "s" : ""}: ${panelParts.join(", ")}. ` +
     `All panel members were calibrated prior to the assessment to ensure consistent application of the rating scale and behavioural anchors. ` +
-    `Scores were moderated through a structured calibration session led by the Lead Assessor.`;
+    `Scores were moderated through a structured calibration session led by the AC Assessor.`;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -905,21 +941,21 @@ function renderOverviewPage(
   doc.roundedRect(MARGIN_X, ly, CONTENT_W, 22, 2, 2, "S");
 
   const statX = [MARGIN_X + 15, MARGIN_X + 58, MARGIN_X + 100, MARGIN_X + 142];
-  const statLabels = ["Competencies", "Tools", "Observers", "OAR Band"];
+  const statLabels = ["Competencies", "Tools", "Assessors", "OAR Band"];
   const statValues = [
     `${engagement.competencies.length}`,
     `${engagement.tools.length}`,
     `${engagement.assessors.length}`,
     bandKey ? OAR_BAND_META[bandKey as keyof typeof OAR_BAND_META].label : "N/A",
   ];
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(120, 120, 120);
   statLabels.forEach((lbl, i) => doc.text(lbl, statX[i], ly + 8, { align: "center" }));
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...NAVY);
-  statValues.forEach((val, i) => doc.text(val, statX[i], ly + 17, { align: "center" }));
+  statValues.forEach((val, i) => doc.text(val, statX[i], ly + 18, { align: "center" }));
 }
 
 // ─── Competency Score Table ─────────────────────────────────────────────────
@@ -937,7 +973,17 @@ function renderScoreTable(
   doc.setLineWidth(0.5);
   doc.line(MARGIN_X, MARGIN_TOP + 2, MARGIN_X + 80, MARGIN_TOP + 2);
 
-  const startY = MARGIN_TOP + 10;
+  let introY = MARGIN_TOP + 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  introY = renderWrappedText(
+    doc,
+    "The following table presents the participant\u2019s moderated competency scores alongside the proficiency targets established for this role. A positive gap indicates performance above target.",
+    MARGIN_X, introY, 10, 1.4, CONTENT_W,
+  );
+
+  const startY = introY + 4;
   const tableBody: (string | { content: string; styles: Record<string, unknown> })[][] = [];
 
   engagement.competencies.forEach((sel) => {
@@ -955,27 +1001,23 @@ function renderScoreTable(
 
     tableBody.push([
       comp.name,
-      comp.cluster.charAt(0).toUpperCase() + comp.cluster.slice(1),
-      targetLevel !== null ? `L${targetLevel}` : "--",
+      targetLevel !== null ? `${targetLevel}` : "--",
       score !== null ? score.toFixed(2) : "N/A",
       { content: gapStr, styles: { fillColor: gapFill, textColor: gapText, fontStyle: "bold" } },
-      `${sel.weight}x`,
     ]);
   });
 
   autoTable(doc, {
     startY,
-    head: [["Competency", "Cluster", "Target", "Score", "Gap", "Weight"]],
+    head: [["Competency", "Target", "Score", "Gap"]],
     body: tableBody,
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 10, cellPadding: 4 },
     headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: "bold" },
     columnStyles: {
-      0: { cellWidth: 48 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 18, halign: "center" },
-      3: { cellWidth: 18, halign: "center" },
-      4: { cellWidth: 20, halign: "center" },
-      5: { cellWidth: 18, halign: "center" },
+      0: { cellWidth: 70 },
+      1: { cellWidth: 25, halign: "center" },
+      2: { cellWidth: 25, halign: "center" },
+      3: { cellWidth: 30, halign: "center" },
     },
     margin: { left: MARGIN_X, right: MARGIN_X },
   });
@@ -1021,6 +1063,19 @@ function renderStrengthsPage(doc: jsPDF, engagement: Engagement, participant: Pa
   doc.setLineWidth(0.5);
   doc.line(MARGIN_X, MARGIN_TOP + 2, MARGIN_X + 100, MARGIN_TOP + 2);
 
+  let introY = MARGIN_TOP + 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  introY = renderWrappedText(
+    doc,
+    "This chart compares the participant\u2019s assessed scores against proficiency targets. Competencies are ranked from strongest relative performance to largest development gap.",
+    MARGIN_X, introY, 10, 1.4, CONTENT_W,
+  );
+  // Compute group averages for bar chart
+  const groupAvgs = groupAverageScores(engagement);
+  const showGroupAvg = engagement.participants.length > 1;
+
   // Build bar chart items, sorted by gap
   const items: (BarItem & { gap: number })[] = [];
   engagement.competencies.forEach((sel) => {
@@ -1029,11 +1084,12 @@ function renderStrengthsPage(doc: jsPDF, engagement: Engagement, participant: Pa
     const tgt = engagement.proficiencyTargets.find((t) => t.competencyId === sel.competencyId);
     if (score === null || !comp) return;
     const target = tgt?.targetLevel ?? 3;
-    items.push({ label: comp.name, score, target, gap: score - target });
+    const ga = showGroupAvg ? (groupAvgs.find((g) => g.competencyId === sel.competencyId)?.average ?? null) : null;
+    items.push({ label: comp.name, score, target, groupAvg: ga && ga > 0 ? ga : null, gap: score - target });
   });
   items.sort((a, b) => b.gap - a.gap);
 
-  let y = MARGIN_TOP + 14;
+  let y = introY + 4;
   y = renderBarChart(doc, MARGIN_X, y, CONTENT_W, items);
   y += 6;
 
@@ -1079,9 +1135,8 @@ function renderEvidencePage(doc: jsPDF, engagement: Engagement, participant: Par
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
     const nameW = doc.getTextWidth(ev.competencyName);
-    doc.setFontSize(8);
     doc.text(
-      `  Score: ${ev.score?.toFixed(2) ?? "N/A"} | Target: L${ev.target ?? "?"}`,
+      `  Score: ${ev.score?.toFixed(2) ?? "N/A"} | Target: ${ev.target ?? "?"}`,
       MARGIN_X + nameW + 2, y,
     );
     y += 6;
@@ -1134,6 +1189,113 @@ function renderEvidencePage(doc: jsPDF, engagement: Engagement, participant: Par
     }
 
     y += 6;
+  }
+}
+
+// ─── Indicator Evidence Table ─────────────────────────────────────────────────
+
+function renderIndicatorEvidenceTable(doc: jsPDF, engagement: Engagement, participant: Participant) {
+  const enabled = engagement.reportFormat.sections.indicatorEvidence;
+  if (!enabled) return;
+
+  doc.addPage();
+  let y = MARGIN_TOP;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...NAVY);
+  doc.text("Indicator Evidence", MARGIN_X, y);
+  doc.setDrawColor(...OCEAN);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, y + 2, MARGIN_X + 55, y + 2);
+  y += 8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  y = renderWrappedText(
+    doc,
+    "The table below presents the average observer rating for each behavioural indicator within every competency. Ratings are on a 1\u20135 scale where 3 = meets the target proficiency level.",
+    MARGIN_X, y, 10, 1.4, CONTENT_W,
+  );
+  y += 6;
+
+  for (const sel of engagement.competencies) {
+    const comp = findCompetency(sel.competencyId, engagement.customCompetencies);
+    if (!comp) continue;
+
+    const tgt = engagement.proficiencyTargets.find((t) => t.competencyId === sel.competencyId);
+    const targetLevel = tgt?.targetLevel ?? 1;
+    const level = comp.levels.find((l) => l.level === targetLevel);
+    if (!level || level.indicators.length === 0) continue;
+
+    // Collect all observer scores for this competency+participant
+    const compScores: CompetencyScore[] = [];
+    for (const s of engagement.scores) {
+      if (s.participantId !== participant.id) continue;
+      const cs = s.competencies.find((c) => c.competencyId === sel.competencyId);
+      if (cs) compScores.push(cs);
+    }
+
+    // Build rows: one per indicator
+    const tableBody: (string | { content: string; styles: Record<string, unknown> })[][] = [];
+    for (let idx = 0; idx < level.indicators.length; idx++) {
+      const indicatorText = level.indicators[idx];
+      // Average rating across all observer scores for this indicator position
+      const ratings: number[] = [];
+      for (const cs of compScores) {
+        const ind = cs.indicators[idx];
+        if (ind && !ind.notObserved && ind.rating !== undefined) {
+          ratings.push(ind.rating);
+        }
+      }
+      const avg = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+      const avgStr = avg !== null ? avg.toFixed(1) : "N/O";
+      const ratingColor: [number, number, number] = avg !== null
+        ? (avg >= 3 ? [...GREEN] : avg >= 2 ? [...AMBER] : [...RED])
+        : [150, 150, 150];
+
+      tableBody.push([
+        `${idx + 1}`,
+        indicatorText,
+        { content: avgStr, styles: { textColor: ratingColor, fontStyle: "bold", halign: "center" } },
+        `${ratings.length}`,
+      ]);
+    }
+
+    // Competency sub-heading
+    y = ensureSpace(doc, 30, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...NAVY);
+    const score = effectiveCompetencyScore(engagement, participant.id, sel.competencyId);
+    doc.text(comp.name, MARGIN_X, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    const nw = doc.getTextWidth(comp.name);
+    doc.text(`  Score: ${score?.toFixed(2) ?? "N/A"} | Target: ${targetLevel} | Level: ${level.name}`, MARGIN_X + nw + 2, y);
+    y += 5;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Behavioural Indicator", "Avg Rating", "n"]],
+      body: tableBody,
+      styles: { fontSize: 9, cellPadding: 3, valign: "top", overflow: "linebreak" },
+      headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: "bold", fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 108 },
+        2: { cellWidth: 22, halign: "center" },
+        3: { cellWidth: 12, halign: "center" },
+      },
+      alternateRowStyles: { fillColor: [248, 248, 250] },
+      margin: { left: MARGIN_X, right: MARGIN_X },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    y = (doc as any).lastAutoTable?.finalY ?? y + 30;
+    y += 8;
   }
 }
 
@@ -1301,6 +1463,12 @@ function addHeadersAndFooters(doc: jsPDF, engagement: Engagement) {
 
   for (let i = 2; i <= totalPages; i++) {
     doc.setPage(i);
+
+    // Header line
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN_X, HEADER_Y + 3, PAGE_W - MARGIN_X, HEADER_Y + 3);
+
     if (engagement.basics.confidentialityFlag) {
       doc.setFontSize(7);
       doc.setFont("helvetica", "bold");
@@ -1312,7 +1480,15 @@ function addHeadersAndFooters(doc: jsPDF, engagement: Engagement) {
     doc.setTextColor(150, 150, 150);
     doc.text(code, PAGE_W - MARGIN_X, HEADER_Y, { align: "right" });
 
-    doc.text(`${i}`, PAGE_W / 2, FOOTER_Y, { align: "center" });
+    // Footer line + text
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN_X, FOOTER_Y - 4, PAGE_W - MARGIN_X, FOOTER_Y - 4);
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(150, 150, 150);
+    doc.text(`${i} of ${totalPages}`, PAGE_W / 2, FOOTER_Y, { align: "center" });
     const brand = client ? `Synovate | ${client}` : "Synovate";
     doc.text(brand, PAGE_W - MARGIN_X, FOOTER_Y, { align: "right" });
   }
@@ -1343,7 +1519,7 @@ export function buildIndividualReportDoc(
   renderStrengthsPage(doc, engagement, participant);
   renderEvidencePage(doc, engagement, participant);
   renderNarrativeSection(doc, engagement, participant, "competencyProfile");
-  renderNarrativeSection(doc, engagement, participant, "indicatorEvidence");
+  renderIndicatorEvidenceTable(doc, engagement, participant);
 
   // ── Part 3: Development & Next Steps ──
   renderPartDivider(doc, 3, "Development & Next Steps");
